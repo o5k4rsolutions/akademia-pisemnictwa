@@ -70,7 +70,7 @@
         } catch (error) {
             console.error("Błąd inicjalizacji Firebase:", error);
             document.getElementById('app-container').innerHTML = '<div class="text-red-500 p-8 card bg-white rounded-xl">Błąd konfiguracji Firebase. Sprawdź konsolę.</div>';
-            return;
+            // Usunięto: return; - ponieważ instrukcja 'return' jest nieprawidłowa w głównym zakresie modułu
         }
 
         let currentView = 'home';
@@ -422,7 +422,7 @@
         };
 
         window.simulateVerification = async () => {
-            if (userId && !userProfile.isVerified) {
+            if (userId && userProfile && !userProfile.isVerified) {
                 try {
                     await updateDoc(getUserDocRef(userId), {
                         isVerified: true,
@@ -450,8 +450,8 @@
             }
         };
         
-        window.onload = () => {
-            initializeAuth();
+        window.onload = async () => {
+            await initializeAuth();
             
             const initialHash = window.location.hash.substring(1);
             if (initialHash === 'auth' || initialHash === 'login' || initialHash === 'register') {
