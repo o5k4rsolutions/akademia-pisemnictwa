@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akademia Pisemnictwa - Klub Plików</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc;
+        }
+        .card {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease;
+        }
+        .btn-primary {
+            transition: all 0.2s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <header class="bg-white shadow-lg sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-indigo-600 tracking-wider">
+                <i class="fas fa-feather-alt mr-2"></i>Akademia Pisemnictwa
+            </h1>
+            <nav id="nav-container">
+            </nav>
+        </div>
+    </header>
+
+    <main id="app-container" class="flex-grow flex items-center justify-center p-4">
+        <div class="text-center text-gray-500">
+            <i class="fas fa-circle-notch fa-spin text-4xl text-indigo-500"></i>
+            <p class="mt-3">Ładowanie aplikacji...</p>
+        </div>
+    </main>
+
+    <footer class="bg-gray-100 p-4 text-center text-sm text-gray-500">
+        &copy; 2024 Akademia Pisemnictwa. Projekt edukacyjny.
+    </footer>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, query, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        setLogLevel('Debug');
+
+        const FORMSPREE_ENDPOINT = 'https://formspree.io/f/mkgkwena';
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app, db, auth;
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+        } catch (error) {
+            console.error("Błąd inicjalizacji Firebase:", error);
+            document.getElementById('app-container').innerHTML = '<div class="text-red-500 p-8 card bg-white rounded-xl">Błąd konfiguracji Firebase. Sprawdź konsolę.</div>';
+            return;
+        }
+
+        let currentView = 'home';
+        let isAuthenticated = false;
+        let userId = null;
+        let userProfile = null;
+        let isAuthReady = false;
+
+        const appContainer = document.getElementById('app-container');
+        const navContainer = document.getElementById('nav-container');
+        let currentToast = null;
+
+        const showToast = (message, type = 'info') => {
+            if (currentToast) {
+                currentToast.remove();
+            }
+
+            const bgColor = type === 'error' ? 'bg-red-500' : (type === 'success' ? 'bg-green-500' : 'bg-indigo-500');
+
+            const toast = document.createElement('div');
+            toast.className = `fixed top-5 right-5 p-4 rounded-lg text-white shadow-xl ${bgColor} transition-opacity duration-300 z-50`;
+            toast.textContent = message;
+
+            document.body.appendChild(toast);
+            currentToast = toast;
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                toast.addEventListener('transitionend', () => toast.remove());
+            }, 5000);
+        };
+
+        const renderAuthButton = () => {
+            if (isAuthReady) {
+                if (isAuthenticated) {
+                    navContainer.innerHTML = `
+                        <button onclick="handleLogout()" class="btn-primary bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                            Wyloguj (${userProfile?.name?.split(' ')[0] || userId.substring(0, 4) + '...'})
+                        </button>
+                    `;
+                } else {
+                    navContainer.innerHTML = `
+                        <button onclick="changeView('auth', 'login')" class="btn-primary bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                            Zaloguj się
+                        </button>
+                    `;
+                }
+            } else {
+                 navContainer.innerHTML = `<span class="text-gray-500 text-sm">Ładowanie...</span>`;
+            }
+        };
+
+        const views = {
+            'home': `
+                <div class="card bg-white p-8 md:p-12 rounded-2xl max-w-2xl w-full text-center">
+                    <h2 class="text-4xl font-extrabold text-gray-900 mb-4">
+                        <i class="fas fa-graduation-cap text-indigo-500 mr-2"></i>
+                        Akademia Pisemnictwa
+                    </h2>
+                    <p class="text-xl text-gray-600 mb-8">
+                        Twój dostęp do sprawdzonych materiałów, gotowych wypracowań i wzorów, które pomogą Ci osiągnąć mistrzostwo w pisaniu. Dołącz do elitarnego "Klubu Plików"!
+                    </p>
+                    <button onclick="changeView('auth', 'register')" class="btn-primary bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl text-lg focus:outline-none focus:ring-4 focus:ring-indigo-300 shadow-lg">
+                        Zarejestruj się i uzyskaj dostęp
+                    </button>
+                </div>
+            `,
+            'auth': (mode) => `
+                <div class="card bg-white p-6 md:p-8 rounded-2xl max-w-md w-full">
+                    <h2 class="text-3xl font-bold text-gray-900 mb-6 text-center">
+                        ${mode === 'login' ? 'Zaloguj się do Klubu' : 'Zarejestruj się'}
+                    </h2>
+                    <form id="auth-form">
+                        ${mode === 'register' ? `
+                            <div class="mb-4">
+                                <label for="name" class="block text-sm font-medium text-gray-700">Imię i Nazwisko</label>
+                                <input type="text" id="name" name="name" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                            <div class="mb-4">
+                                <label for="phone" class="block text-sm font-medium text-gray-700">Numer telefonu (opcjonalnie)</label>
+                                <input type="tel" id="phone" name="phone" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                        ` : ''}
+                        <div class="mb-4">
+                            <label for="email" class="block text-sm font-medium text-gray-700">Adres E-mail</label>
+                            <input type="email" id="email" name="email" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="mb-6">
+                            <label for="password" class="block text-sm font-medium text-gray-700">Hasło</label>
+                            <input type="password" id="password" name="password" required minlength="6" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <button type="submit" class="btn-primary w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-300" id="auth-submit-btn">
+                            ${mode === 'login' ? 'Zaloguj' : 'Zarejestruj i Kontynuuj'}
+                        </button>
+                    </form>
+                    <p class="mt-4 text-center text-sm text-gray-600">
+                        ${mode === 'login' ? 'Nie masz konta? ' : 'Masz już konto? '}
+                        <button onclick="changeView('auth', '${mode === 'login' ? 'register' : 'login'}')" class="text-indigo-600 hover:text-indigo-800 font-medium underline">
+                            ${mode === 'login' ? 'Zarejestruj się' : 'Zaloguj się'}
+                        </button>
+                    </p>
+                </div>
+            `,
+            'pending': (profile) => `
+                <div class="card bg-white p-8 md:p-12 rounded-2xl max-w-xl w-full text-center border-4 border-yellow-400">
+                    <i class="fas fa-hourglass-half text-6xl text-yellow-500 mb-4 animate-pulse"></i>
+                    <h2 class="text-3xl font-bold text-gray-900 mb-2">Trwa weryfikacja konta</h2>
+                    <p class="text-lg text-gray-700 mb-6">
+                        Dziękujemy za rejestrację, **${profile?.name || 'Użytkowniku'}**! Twoje zgłoszenie zostało wysłane do administratora.
+                    </p>
+                    <p class="text-xl font-semibold text-red-600 mb-6">
+                        Weryfikacja potrwa do 5 dni roboczych.
+                    </p>
+                    <p class="text-gray-600">
+                        O pozytywnej weryfikacji otrzymasz maila na adres: **${profile?.email || 'brak adresu'}**. Po tym czasie będziesz mógł zalogować się do Klubu Plików.
+                    </p>
+                    <p class="mt-6 text-sm text-gray-500">
+                        Twój unikalny identyfikator: <code>${userId}</code>
+                    </p>
+                    <button onclick="simulateVerification()" class="mt-4 text-xs text-yellow-700 hover:underline">
+                        [Dev: Symuluj weryfikację]
+                    </button>
+                </div>
+            `,
+            'club': (profile) => `
+                <div class="card bg-white p-8 md:p-12 rounded-2xl max-w-4xl w-full">
+                    <h2 class="text-4xl font-extrabold text-indigo-700 mb-6 border-b-2 border-indigo-200 pb-2">
+                        <i class="fas fa-archive mr-2"></i>Klub Plików - Dostęp Udzielony!
+                    </h2>
+                    <p class="text-xl text-gray-700 mb-8">
+                        Witaj, **${profile?.name || 'Członku Klubu'}**! Masz pełny dostęp do wszystkich materiałów. Poniżej znajdziesz pliki do pobrania i nauki.
+                    </p>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        ${renderFileCard('Wzory Wypracowań Maturalnych', 'Kluczowe frazy i struktury dla egzaminu pisemnego.', 'fas fa-pen-nib', 'indigo', 'pobierzMaturę()')}
+                        ${renderFileCard('Checklista Argumentacji', 'Lista kontrolna, która pomoże Ci zbudować mocne, logiczne argumenty.', 'fas fa-list-check', 'green', 'pobierzChecklistę()')}
+                        ${renderFileCard('Słownictwo na 5+', 'Rozszerzony zestaw synonimów i zaawansowanych słów do esejów.', 'fas fa-book', 'rose', 'pobierzSłownictwo()')}
+                        ${renderFileCard('Struktury Tekstów Naukowych', 'Szablony do tworzenia prac zaliczeniowych i licencjackich.', 'fas fa-scroll', 'yellow', 'pobierzTeksty()')}
+                    </div>
+                </div>
+            `,
+        };
+
+        function renderFileCard(title, description, iconClass, color, action) {
+            const colorMap = {
+                indigo: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200',
+                green: 'bg-green-100 text-green-700 hover:bg-green-200',
+                rose: 'bg-rose-100 text-rose-700 hover:bg-rose-200',
+                yellow: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200',
+            };
+            return `
+                <div class="bg-white p-6 rounded-xl border border-gray-200 flex flex-col justify-between ${colorMap[color]} transition duration-200">
+                    <div>
+                        <i class="${iconClass} text-3xl mb-3"></i>
+                        <h3 class="text-xl font-bold mb-2">${title}</h3>
+                        <p class="text-sm text-gray-600 mb-4">${description}</p>
+                    </div>
+                    <button onclick="${action}" class="btn-primary w-full bg-white text-gray-800 font-semibold py-2 rounded-lg border border-gray-300 hover:bg-gray-100 mt-2">
+                        <i class="fas fa-download mr-2"></i>Pobierz Plik
+                    </button>
+                </div>
+            `;
+        }
+        
+        window.pobierzMaturę = () => showToast('Pobieranie: Wzory Wypracowań Maturalnych...', 'success');
+        window.pobierzChecklistę = () => showToast('Pobieranie: Checklista Argumentacji...', 'success');
+        window.pobierzSłownictwo = () => showToast('Pobieranie: Słownictwo na 5+...', 'success');
+        window.pobierzTeksty = () => showToast('Pobieranie: Struktury Tekstów Naukowych...', 'success');
+
+        window.changeView = (newView, authMode = 'login') => {
+            currentView = newView;
+            renderApp(authMode);
+            window.history.pushState({ view: newView, mode: authMode }, '', `#${newView}`);
+        };
+
+        const renderApp = (authMode = 'login') => {
+            renderAuthButton();
+
+            let content = '';
+            const profile = userProfile;
+
+            if (!isAuthReady) {
+                 content = '<div class="text-center text-gray-500"><i class="fas fa-circle-notch fa-spin text-4xl text-indigo-500"></i><p class="mt-3">Ładowanie stanu uwierzytelnienia...</p></div>';
+            } else if (isAuthenticated) {
+                if (profile && profile.isVerified) {
+                    currentView = 'club';
+                    content = views['club'](profile);
+                } else {
+                    currentView = 'pending';
+                    content = views['pending'](profile);
+                }
+            } else if (currentView === 'auth') {
+                content = views['auth'](authMode);
+            } else {
+                currentView = 'home';
+                content = views['home'];
+            }
+
+            appContainer.innerHTML = content;
+
+            if (currentView === 'auth') {
+                const form = document.getElementById('auth-form');
+                if (form) {
+                    form.onsubmit = (e) => {
+                        e.preventDefault();
+                        const email = form.email.value;
+                        const password = form.password.value;
+                        
+                        if (authMode === 'register') {
+                            const name = form.name.value;
+                            const phone = form.phone.value;
+                            handleRegistration(email, password, name, phone, form);
+                        } else {
+                            handleLogin(email, password, form);
+                        }
+                    };
+                }
+            }
+        };
+
+        const getUserDocRef = (uid) => doc(db, 'artifacts', appId, 'users', uid, 'user_profile', 'data');
+
+        const setupProfileListener = (uid) => {
+            const profileRef = getUserDocRef(uid);
+            onSnapshot(profileRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    userProfile = docSnap.data();
+                    renderApp();
+                    if (userProfile.isVerified && currentView === 'pending') {
+                         showToast('Twoje konto zostało zweryfikowane! Witaj w Klubie Plików!', 'success');
+                    }
+                } else {
+                    userProfile = null;
+                }
+            }, (error) => {
+                console.error("Błąd nasłuchiwania profilu:", error);
+                showToast("Nie udało się pobrać danych profilu.", 'error');
+            });
+        };
+
+        onAuthStateChanged(auth, async (user) => {
+            isAuthenticated = !!user;
+            userId = user ? user.uid : null;
+            
+            if (isAuthenticated) {
+                setupProfileListener(userId);
+            } else {
+                userProfile = null;
+                changeView('home');
+            }
+            isAuthReady = true;
+            renderApp();
+        });
+
+
+        async function handleRegistration(email, password, name, phone, form) {
+            const submitBtn = document.getElementById('auth-submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Trwa rejestracja...';
+
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const uid = userCredential.user.uid;
+
+                const userData = {
+                    name: name,
+                    email: email,
+                    phone: phone || 'N/A',
+                    isVerified: false,
+                    registrationDate: new Date().toISOString(),
+                    uid: uid,
+                };
+                await setDoc(getUserDocRef(uid), userData);
+                userProfile = userData;
+
+                await fetch(FORMSPREE_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        'WERYFIKACJA KONTA': 'Nowe konto do weryfikacji!',
+                        'ID Użytkownika (Firestore)': uid,
+                        'Imię i Nazwisko': name,
+                        'Email': email,
+                        'Telefon': phone || 'Brak',
+                        'Instrukcja': `Zweryfikuj konto klikając w konsoli lub ręcznie w bazie Firestore i zmieniając 'isVerified' na true dla dokumentu o UID: ${uid}`,
+                    }),
+                });
+
+                showToast('Konto utworzone! Zgłoszenie weryfikacyjne zostało wysłane do administratora.', 'success');
+                changeView('pending');
+
+            } catch (error) {
+                console.error("Błąd rejestracji:", error);
+                let message = "Wystąpił nieznany błąd podczas rejestracji.";
+                if (error.code === 'auth/email-already-in-use') {
+                    message = "Ten adres e-mail jest już zajęty.";
+                } else if (error.code === 'auth/weak-password') {
+                    message = "Hasło jest za słabe (min. 6 znaków).";
+                }
+                showToast(message, 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Zarejestruj i Kontynuuj';
+            }
+        }
+
+        async function handleLogin(email, password, form) {
+            const submitBtn = document.getElementById('auth-submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Trwa logowanie...';
+
+            try {
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                const uid = userCredential.user.uid;
+
+                const docSnap = await getDoc(getUserDocRef(uid));
+                
+                if (docSnap.exists()) {
+                    const profile = docSnap.data();
+                    if (profile.isVerified) {
+                        showToast('Zalogowano pomyślnie. Witaj w Klubie Plików!', 'success');
+                    } else {
+                        showToast('Zalogowano, ale konto jest jeszcze w trakcie weryfikacji.', 'info');
+                    }
+                } else {
+                    showToast('Zalogowano, ale nie znaleziono profilu. Skontaktuj się z administratorem.', 'error');
+                }
+
+            } catch (error) {
+                console.error("Błąd logowania:", error);
+                let message = "Wystąpił błąd podczas logowania.";
+                if (error.code === 'auth/invalid-email' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+                    message = "Nieprawidłowy e-mail lub hasło.";
+                }
+                showToast(message, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Zaloguj';
+            }
+        }
+        
+        window.handleLogout = async () => {
+             try {
+                await signOut(auth);
+                showToast('Wylogowano pomyślnie.', 'info');
+                changeView('home');
+            } catch (error) {
+                console.error("Błąd wylogowania:", error);
+                showToast('Nie udało się wylogować.', 'error');
+            }
+        };
+
+        window.simulateVerification = async () => {
+            if (userId && !userProfile.isVerified) {
+                try {
+                    await updateDoc(getUserDocRef(userId), {
+                        isVerified: true,
+                        verificationDate: new Date().toISOString()
+                    });
+                    console.log(`[DEV]: Konto ${userId} zostało pomyślnie zweryfikowane.`);
+                } catch (error) {
+                    console.error("Błąd symulacji weryfikacji:", error);
+                    showToast('Błąd symulacji weryfikacji. Sprawdź konsolę i zasady Firestore.', 'error');
+                }
+            } else {
+                showToast('Nie można symulować weryfikacji: brak zalogowanego użytkownika lub już zweryfikowany.', 'info');
+            }
+        };
+
+        const initializeAuth = async () => {
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (e) {
+                console.error("Błąd autoryzacji początkowej:", e);
+            }
+        };
+        
+        window.onload = () => {
+            initializeAuth();
+            
+            const initialHash = window.location.hash.substring(1);
+            if (initialHash === 'auth' || initialHash === 'login' || initialHash === 'register') {
+                changeView('auth', initialHash === 'register' ? 'register' : 'login');
+            } else if (initialHash === 'pending') {
+                changeView('pending');
+            } else if (initialHash === 'club') {
+                changeView('club');
+            } else {
+                changeView('home');
+            }
+        };
+    </script>
+</body>
+</html>
