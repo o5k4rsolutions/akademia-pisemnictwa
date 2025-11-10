@@ -12,12 +12,12 @@
         .btn-primary { transition: all 0.2s; }
         .btn-primary:hover { box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); }
         .input-field:focus { border-color: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3); }
+        #view-container { transition: opacity 0.4s ease-in-out; }
     </style>
 </head>
 <body>
 
     <div id="app" class="min-h-screen flex flex-col">
-        <!-- Loader / Komunikat -->
         <div id="loading-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center hidden z-50">
             <div class="bg-white p-6 rounded-lg shadow-xl flex items-center">
                 <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-emerald-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -28,11 +28,13 @@
             </div>
         </div>
 
-        <!-- Nagłówek i Nawigacja -->
         <header class="bg-white shadow-md">
             <nav class="container mx-auto px-4 py-4 flex justify-between items-center">
                 <a href="#" onclick="navigateTo('home')" class="text-2xl font-bold text-emerald-600">Akademia Pisemnictwa</a>
                 <div class="flex items-center space-x-4">
+                    <a href="#" id="dashboard-link" onclick="navigateTo('dashboard')" class="text-gray-700 hover:text-emerald-600 font-medium hidden">Panel Główny</a>
+                    <a href="#" id="files-link" onclick="checkVerificationStatus(true)" class="text-gray-700 hover:text-emerald-600 font-medium hidden">Klub Nauczyciela</a>
+
                     <span id="user-display" class="hidden text-gray-700 text-sm font-medium"></span>
                     <button id="auth-button" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out" onclick="handleAuthClick()">
                         Zaloguj się
@@ -41,32 +43,23 @@
             </nav>
         </header>
 
-        <!-- Główna Zawartość -->
         <main class="flex-grow container mx-auto px-4 py-8">
             <div id="view-container">
-                <!-- Widoki będą renderowane tutaj przez JavaScript -->
             </div>
         </main>
 
-        <!-- Stopka -->
         <footer class="bg-gray-800 text-white py-4 text-center">
             <p class="text-sm">&copy; 2024 Akademia Pisemnictwa. Wszelkie prawa zastrzeżone.</p>
         </footer>
     </div>
 
-    <!-- Skrypty Firebase i Logika Aplikacji -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // setLogLevel('debug'); // Odkomentuj do debugowania
-
-        // --- GLOBALNE ZMIENNE ŚRODOWISKOWE (OBOWIĄZKOWE) ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
-        // Używamy konfiguracji dostarczonej przez użytkownika, aby naprawić błąd "projectId" not provided
         const firebaseConfig = {
             apiKey: "AIzaSyDrp3PAn31CvEeNNjEdRo_5oxpmIeL8T5Q",
             authDomain: "akademia-pisemnictwa.firebaseapp.com",
@@ -80,56 +73,46 @@
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         const FORMSPREE_URL = 'https://formspree.io/f/mkgkwena';
 
-        // --- STAN APLIKACJI ---
         let app, db, auth;
         let userId = null;
         let isAuthReady = false;
-        let userProfile = null; // Przechowuje dane profilu z Firestore
-        let currentView = 'home'; // home, auth, verificationPending, filesClub
+        let userProfile = null;
+        let currentView = 'home';
 
-        // --- ELEMENTY DOM ---
         const viewContainer = document.getElementById('view-container');
         const authButton = document.getElementById('auth-button');
         const userDisplay = document.getElementById('user-display');
         const loadingOverlay = document.getElementById('loading-overlay');
         const loadingText = document.getElementById('loading-text');
 
-        // Funkcja do pokazywania/ukrywania loadera
         const setLoading = (show, text = 'Ładowanie...') => {
             loadingText.textContent = text;
             loadingOverlay.classList.toggle('hidden', !show);
         };
 
-        // --- FIREBASE SETUP & AUTH ---
-
         const getUserProfileRef = (uid) => {
-             // Ścieżka do prywatnego profilu: /artifacts/{appId}/users/{uid}/academy_profiles/data
             return doc(db, `artifacts/${appId}/users/${uid}/academy_profiles/data`);
         }
 
         const setupFirebase = async () => {
+            navigateTo('home');
             try {
-                // Konfiguracja jest teraz zdefiniowana w stałej firebaseConfig
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
 
-                // Obsługa początkowego uwierzytelnienia z Canvas
                 if (initialAuthToken) {
                     await signInWithCustomToken(auth, initialAuthToken);
                 } else {
                     await signInAnonymously(auth);
                 }
 
-                // Nasłuchiwanie zmian stanu uwierzytelnienia
                 onAuthStateChanged(auth, (user) => {
                     userId = user ? user.uid : null;
                     isAuthReady = true;
-                    // Jeśli użytkownik jest zalogowany (nie anonimowo, bo ma email/hasło), spróbuj pobrać profil
                     if (user && user.email) {
                         listenToUserProfile(user.uid);
                     } else {
-                        // Jeśli wylogowany lub anonimowy, resetuj widok i profil
                         userProfile = null;
                         updateAuthUI(user);
                         if (currentView !== 'home') {
@@ -145,20 +128,16 @@
             }
         };
 
-        // Nasłuchiwanie zmian w profilu użytkownika (status weryfikacji)
         const listenToUserProfile = (uid) => {
             const profileRef = getUserProfileRef(uid);
             onSnapshot(profileRef, (docSnap) => {
                 if (docSnap.exists()) {
                     userProfile = docSnap.data();
-                    console.log("Pobrano profil:", userProfile);
-                    checkVerificationStatus();
+                    checkVerificationStatus(false);
                 } else {
                     userProfile = null;
-                    // Jeśli użytkownik jest zalogowany, ale nie ma profilu (prawdopodobnie anonimowy lub problem),
-                    // cofamy do strony głównej.
                     if (auth.currentUser && !auth.currentUser.isAnonymous) {
-                         // To może się zdarzyć, gdy zarejestrowany użytkownik usunie swoje dane z Firestore
+                         navigateTo('home');
                     } else {
                         navigateTo('home');
                     }
@@ -171,8 +150,7 @@
             });
         };
 
-        // Weryfikacja statusu i nawigacja po zalogowaniu
-        const checkVerificationStatus = () => {
+        const checkVerificationStatus = (forceVerificationCheck = false) => {
             if (!auth.currentUser) {
                 navigateTo('home');
                 return;
@@ -180,28 +158,37 @@
 
             if (userProfile && userProfile.verificationStatus === 'verified') {
                 navigateTo('filesClub');
-            } else if (userProfile && userProfile.verificationStatus === 'pending') {
-                navigateTo('verificationPending');
+            } else if (userProfile) { 
+                if (forceVerificationCheck) {
+                    navigateTo('verificationStatusCheck');
+                } else {
+                    navigateTo('dashboard');
+                }
             } else {
-                // To się zdarza, gdy użytkownik zalogował się, ale nie przeszedł rejestracji (np. testowo)
                 navigateTo('home');
             }
         };
 
-        // --- OBSŁUGA UI I NAWIGACJA ---
-
-        // Aktualizacja przycisku logowania/wylogowania
         const updateAuthUI = (user) => {
+            const dashboardLink = document.getElementById('dashboard-link');
+            const filesLink = document.getElementById('files-link');
+
             if (user && userProfile) {
                 authButton.textContent = 'Wyloguj';
                 authButton.onclick = signOutUser;
                 userDisplay.textContent = `Witaj, ${userProfile.fullName.split(' ')[0]}!`;
                 userDisplay.classList.remove('hidden');
+                
+                dashboardLink.classList.remove('hidden');
+                filesLink.classList.remove('hidden');
             } else {
                 authButton.textContent = 'Zaloguj się';
                 authButton.onclick = () => navigateTo('auth');
                 userDisplay.classList.add('hidden');
                 userDisplay.textContent = '';
+                
+                if (dashboardLink) dashboardLink.classList.add('hidden');
+                if (filesLink) filesLink.classList.add('hidden');
             }
         };
 
@@ -213,7 +200,6 @@
             }
         };
         
-        // Funkcja do wyświetlania komunikatów (zamiast alert())
         const alertMessage = (message) => {
             const notification = document.createElement('div');
             notification.className = 'fixed top-4 right-4 bg-red-600 text-white p-4 rounded-lg shadow-xl z-[999] opacity-0 transition-opacity duration-300';
@@ -224,21 +210,21 @@
             setTimeout(() => { notification.remove(); }, 5000);
         };
 
-
-        // Główna funkcja nawigacji
         window.navigateTo = (view) => {
             currentView = view;
             render();
-            // Przewiń do góry po zmianie widoku
             window.scrollTo(0, 0);
         };
         
-        // --- WIDOKI ---
-
         const renderHomeView = () => `
             <div class="hero-bg text-white p-12 md:p-20 rounded-xl shadow-2xl text-center">
                 <h1 class="text-4xl md:text-6xl font-extrabold mb-4">Akademia Pisemnictwa</h1>
                 <p class="text-xl md:text-2xl mb-8 font-light">Twoje źródło profesjonalnych materiałów do nauki pisania wypracowań.</p>
+                
+                <p class="text-lg mb-10 font-medium text-emerald-100 max-w-2xl mx-auto">
+                    Akademia Pisemnictwa to platforma stworzona z myślą o <b>nauczycielach języka polskiego</b>. Dostarczamy gotowe, sprawdzone materiały dydaktyczne, w tym <b>checklisty i szablony</b>, które ułatwiają weryfikację wiedzy i umiejętności pisarskich uczniów.
+                </p>
+
                 <button onclick="navigateTo('auth')" class="bg-white text-emerald-600 font-bold py-3 px-8 rounded-full text-lg uppercase tracking-wider btn-primary">
                     Dołącz do Klubu Plików
                 </button>
@@ -291,15 +277,63 @@
             </div>
         `;
 
-        const renderVerificationPendingView = () => `
-            <div class="max-w-xl mx-auto bg-yellow-50 p-10 rounded-xl shadow-2xl border-l-4 border-yellow-500 text-center">
-                <svg class="w-16 h-16 text-yellow-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                <h2 class="text-3xl font-bold mb-4 text-gray-800">Trwa weryfikacja konta</h2>
-                <p class="text-gray-600 mb-6 text-lg">Dziękujemy za rejestrację, ${userProfile ? userProfile.fullName.split(' ')[0] : 'Użytkowniku'}!</p>
-                <p class="text-gray-700 font-medium">Weryfikacja portwa do **5 dni roboczych**. O pozytywnej weryfikacji otrzymasz maila. Po weryfikacji automatycznie uzyskasz dostęp do Klubu Plików.</p>
-                <button onclick="signOutUser()" class="mt-8 text-sm text-red-500 hover:text-red-700 transition">Wyloguj i wróć później</button>
-            </div>
-        `;
+        const renderDashboardView = () => {
+            const userName = userProfile ? userProfile.fullName.split(' ')[0] : 'Użytkowniku';
+            return `
+                <div class="bg-white p-8 rounded-xl shadow-2xl border-t-4 border-emerald-600 text-center">
+                    <h2 class="text-4xl font-bold mb-4 text-gray-800">Witaj, ${userName}!</h2>
+                    <p class="text-xl text-gray-600 mb-8">Jak Ci mija dzisiejszy dzień?</p>
+                    <p class="text-gray-500">Przejdź do <b>Klubu Nauczyciela</b>, aby uzyskać dostęp do materiałów, lub poczekaj na weryfikację konta.</p>
+                    <button onclick="checkVerificationStatus(true)" class="mt-6 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-6 rounded-lg btn-primary shadow-md">
+                        Przejdź do Klubu Nauczyciela
+                    </button>
+                </div>
+            `;
+        };
+
+        const renderVerificationStatusView = () => {
+            const isPending = userProfile && userProfile.verificationStatus === 'pending';
+            const userName = userProfile ? userProfile.fullName.split(' ')[0] : 'Użytkowniku';
+            
+            let title, messageHtml;
+
+            if (isPending) {
+                title = 'Trwa weryfikacja konta';
+                messageHtml = `
+                    <p class="text-gray-700 mb-4">Twój wniosek został przyjęty do weryfikacji. Proces ten potrwa do <b>5 dni roboczych</b>. O pozytywnej weryfikacji poinformujemy Cię mailowo.</p>
+                `;
+            } else {
+                title = 'Konto Wymaga Weryfikacji';
+                messageHtml = `
+                    <p class="text-gray-700 font-medium mb-4">Twoje konto nie zostało zweryfikowane. Skontaktuj się z nami w celu wyjaśnienia statusu.</p>
+                `;
+            }
+
+            const sharedContactHtml = `
+                <p class="font-semibold text-gray-800 mt-4 mb-2">Skontaktuj się z nami:</p>
+                <ul class="list-disc list-inside space-y-1 text-sm text-gray-600">
+                    <li><span class="font-medium text-emerald-600">Sprawy weryfikacji konta:</span> <a href="mailto:weryfikacja.osc4r@hub.pl" class="text-blue-600 hover:underline">weryfikacja.osc4r@hub.pl</a></li>
+                    <li><span class="font-medium text-emerald-600">Inne zapytania:</span> <a href="mailto:centrumobslugiklienta@osc4r.hub.pl" class="text-blue-600 hover:underline">centrumobslugiklienta@osc4r.hub.pl</a></li>
+                </ul>
+                <p class="mt-4 text-sm text-gray-500">Odpowiemy w ciągu 5 dni roboczych.</p>
+            `;
+
+
+            return `
+                <div class="max-w-xl mx-auto bg-white p-10 rounded-xl shadow-2xl border-l-4 border-yellow-500 text-center">
+                    <svg class="w-16 h-16 text-yellow-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    <h2 class="text-3xl font-bold mb-4 text-gray-800">${title}</h2>
+                    <p class="text-gray-600 mb-6 text-lg">Witaj, <b>${userName}</b>!</p>
+                    
+                    <div class="text-left bg-gray-50 p-6 rounded-lg border border-gray-200">
+                        ${messageHtml}
+                        ${sharedContactHtml}
+                    </div>
+
+                    <button onclick="signOutUser()" class="mt-8 text-sm text-red-500 hover:text-red-700 transition">Wyloguj</button>
+                </div>
+            `;
+        };
 
         const renderFilesClubView = () => `
             <div class="bg-white p-8 rounded-xl shadow-2xl border-t-4 border-emerald-600">
@@ -307,25 +341,21 @@
                 <p class="text-lg text-gray-700 mb-8">Witaj w miejscu, gdzie znajdziesz sprawdzone, gotowe do użycia materiały. Dostęp tylko dla zweryfikowanych członków.</p>
 
                 <div class="grid md:grid-cols-2 gap-6">
-                    <!-- Materiał 1 -->
                     <div class="bg-gray-50 p-5 rounded-lg border border-gray-200 hover:shadow-md transition duration-150">
                         <h3 class="text-2xl font-semibold mb-2 text-gray-800">Egzamin Ósmoklasisty: Analiza Lektur</h3>
                         <p class="text-gray-600">Szczegółowe streszczenia, motywy i gotowe tezy do najczęściej spotykanych lektur. Format PDF.</p>
                         <a href="#" class="mt-3 inline-block text-emerald-600 font-medium hover:underline">Pobierz plik PDF (2.5 MB)</a>
                     </div>
-                    <!-- Materiał 2 -->
                     <div class="bg-gray-50 p-5 rounded-lg border border-gray-200 hover:shadow-md transition duration-150">
                         <h3 class="text-2xl font-semibold mb-2 text-gray-800">10 Szablonów Wypracowań Wnioskujących</h3>
                         <p class="text-gray-600">Struktury logiczne do tworzenia przekonujących argumentów. Plik DOCX/ODT.</p>
                         <a href="#" class="mt-3 inline-block text-emerald-600 font-medium hover:underline">Pobierz plik DOCX (0.8 MB)</a>
                     </div>
-                    <!-- Materiał 3 -->
                     <div class="bg-gray-50 p-5 rounded-lg border border-gray-200 hover:shadow-md transition duration-150">
                         <h3 class="text-2xl font-semibold mb-2 text-gray-800">Checklista do Oceny Eseju</h3>
                         <p class="text-gray-600">Kompleksowa lista kryteriów oceniania dla nauczycieli i samooceny dla uczniów.</p>
                         <a href="#" class="mt-3 inline-block text-emerald-600 font-medium hover:underline">Otwórz Arkusz Google</a>
                     </div>
-                     <!-- Materiał 4 -->
                     <div class="bg-gray-50 p-5 rounded-lg border border-gray-200 hover:shadow-md transition duration-150">
                         <h3 class="text-2xl font-semibold mb-2 text-gray-800">Wideo: Jak Pisać Wstęp?</h3>
                         <p class="text-gray-600">Nagranie wideo z kursu o skutecznym i angażującym wstępie do każdej pracy pisemnej.</p>
@@ -335,27 +365,32 @@
             </div>
         `;
 
-
         const render = () => {
+            viewContainer.style.opacity = '0';
+            
             let htmlContent;
             switch (currentView) {
                 case 'home':
                     htmlContent = renderHomeView();
                     break;
                 case 'auth':
-                    // Domyślnie pokaż widok logowania, ale pozwól na przełączenie
                     htmlContent = renderAuthView(false); 
                     break;
-                case 'verificationPending':
-                    htmlContent = renderVerificationPendingView();
+                case 'dashboard':
+                    htmlContent = renderDashboardView();
+                    break;
+                case 'verificationStatusCheck':
+                    htmlContent = renderVerificationStatusView();
                     break;
                 case 'filesClub':
                     if (userProfile && userProfile.verificationStatus === 'verified') {
                         htmlContent = renderFilesClubView();
                     } else {
-                        // Ochrona dostępu
-                        htmlContent = renderHomeView();
-                        navigateTo('home');
+                        if (auth.currentUser) {
+                            navigateTo('verificationStatusCheck');
+                        } else {
+                            navigateTo('home');
+                        }
                     }
                     break;
                 default:
@@ -363,10 +398,13 @@
             }
             viewContainer.innerHTML = htmlContent;
             
-            // Po wyrenderowaniu widoku Auth, dołączamy listener do formularza
-            if (currentView === 'auth') {
-                document.getElementById('auth-form').addEventListener('submit', handleAuthFormSubmit);
-            }
+            setTimeout(() => {
+                viewContainer.style.opacity = '1';
+                
+                if (currentView === 'auth') {
+                    document.getElementById('auth-form').addEventListener('submit', handleAuthFormSubmit);
+                }
+            }, 10);
         };
 
         window.switchAuthMode = (isRegister) => {
@@ -375,14 +413,11 @@
             document.getElementById('auth-form').addEventListener('submit', handleAuthFormSubmit);
         };
 
-        // --- OBSŁUGA FORMULARZY ---
-
         const handleAuthFormSubmit = async (event) => {
             event.preventDefault();
             const form = event.target;
             
             if (form.querySelector('#fullName')) {
-                // Tryb Rejestracji
                 const fullName = form.querySelector('#fullName').value.trim();
                 const email = form.querySelector('#email').value.trim();
                 const phone = form.querySelector('#phone').value.trim();
@@ -398,11 +433,9 @@
                     return;
                 }
                 
-                // Uruchomienie rejestracji
                 await registerUser({ fullName, email, phone, password });
 
             } else {
-                // Tryb Logowania
                 const email = form.querySelector('#loginEmail').value.trim();
                 const password = form.querySelector('#loginPassword').value;
                 
@@ -423,14 +456,13 @@
                         'Weryfikacja': 'NOWA REJESTRACJA WYMAGAJĄCA WERYFIKACJI',
                         'Imię i Nazwisko': userData.fullName,
                         'Email': userData.email,
-                        'Numer Telefonu': userData.phone || 'Brak',
+                        'Numer Telefonu': userData.phoneNumber || 'Brak',
                         'Data Rejestracji': new Date().toLocaleString('pl-PL'),
                         'Status': 'PENDING'
                     })
                 });
 
                 if (response.ok) {
-                    console.log("Powiadomienie Formspree wysłane pomyślnie.");
                 } else {
                     console.error("Błąd wysyłania Formspree:", response.statusText);
                 }
@@ -441,33 +473,26 @@
             }
         };
 
-        // --- LOGIKA AUTENTYKACJI I FIREBASE ---
-
         const registerUser = async (data) => {
             setLoading(true, "Tworzenie konta...");
             
             try {
-                // 1. Rejestracja w Firebase Auth
                 const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
                 const uid = userCredential.user.uid;
 
-                // 2. Zapis danych w Firestore
                 const userData = {
                     fullName: data.fullName,
                     email: data.email,
                     phoneNumber: data.phone || null,
                     registrationDate: new Date().toISOString(),
-                    verificationStatus: 'pending' // Domyślny status
+                    verificationStatus: 'pending'
                 };
                 
                 await setDoc(getUserProfileRef(uid), userData);
 
-                // 3. Wysyłka do Formspree (asynchronicznie)
                 await sendFormspreeNotification(userData);
 
-                // 4. Nawigacja do widoku oczekiwania
                 setLoading(false);
-                navigateTo('verificationPending');
 
             } catch (error) {
                 setLoading(false);
@@ -481,7 +506,6 @@
                     errorMessage = `Błąd Firebase: ${error.message}`;
                 }
                 alertMessage(errorMessage);
-                // Wylogowujemy na wypadek, gdyby Auth się udało, a Firestore nie
                 if (auth.currentUser && !auth.currentUser.isAnonymous) {
                      await signOut(auth);
                 }
@@ -491,16 +515,12 @@
         const loginUser = async (email, password) => {
             setLoading(true, "Logowanie...");
             try {
-                const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                
-                // Po zalogowaniu, onAuthStateChanged + listenToUserProfile zajmą się resztą
-                // i nawigacją do właściwego widoku.
-            
+                await signInWithEmailAndPassword(auth, email, password);
             } catch (error) {
                 setLoading(false);
                 console.error("Błąd logowania:", error);
                 let errorMessage = 'Błąd logowania. Sprawdź e-mail i hasło.';
-                if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
                     errorMessage = 'Nieprawidłowy adres e-mail lub hasło.';
                 }
                 alertMessage(errorMessage);
@@ -512,7 +532,6 @@
             try {
                 await signOut(auth);
                 userProfile = null;
-                // navigateTo('home') jest wywoływane przez onAuthStateChanged
             } catch (error) {
                 console.error("Błąd wylogowania:", error);
                 alertMessage(`Błąd wylogowania: ${error.message}`);
@@ -521,8 +540,6 @@
             }
         };
 
-
-        // --- START APLIKACJI ---
         window.onload = setupFirebase;
 
     </script>
