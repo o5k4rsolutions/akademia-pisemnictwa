@@ -65,7 +65,18 @@
 
         // --- GLOBALNE ZMIENNE ŚRODOWISKOWE (OBOWIĄZKOWE) ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        
+        // Używamy konfiguracji dostarczonej przez użytkownika, aby naprawić błąd "projectId" not provided
+        const firebaseConfig = {
+            apiKey: "AIzaSyDrp3PAn31CvEeNNjEdRo_5oxpmIeL8T5Q",
+            authDomain: "akademia-pisemnictwa.firebaseapp.com",
+            projectId: "akademia-pisemnictwa",
+            storageBucket: "akademia-pisemnictwa.firebasestorage.app",
+            messagingSenderId: "743127115663",
+            appId: "1:743127115663:web:4e89d5bcc1b00c8eef0dfa",
+            measurementId: "G-4K3TK9XLLR"
+        };
+        
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         const FORMSPREE_URL = 'https://formspree.io/f/mkgkwena';
 
@@ -98,6 +109,7 @@
 
         const setupFirebase = async () => {
             try {
+                // Konfiguracja jest teraz zdefiniowana w stałej firebaseConfig
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
