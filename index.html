@@ -12,12 +12,17 @@
         .btn-primary { transition: all 0.2s; }
         .btn-primary:hover { box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); }
         .input-field:focus { border-color: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3); }
-        #view-container { transition: opacity 0.4s ease-in-out; }
+        
+        #view-container { 
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out; 
+            transform: perspective(1000px) translateY(0) scale(1);
+        }
     </style>
 </head>
 <body>
 
     <div id="app" class="min-h-screen flex flex-col">
+        <!-- Overlay ładowania -->
         <div id="loading-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center hidden z-50">
             <div class="bg-white p-6 rounded-lg shadow-xl flex items-center">
                 <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-emerald-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -28,6 +33,7 @@
             </div>
         </div>
 
+        <!-- Nagłówek -->
         <header class="bg-white shadow-md">
             <nav class="container mx-auto px-4 py-4 flex justify-between items-center">
                 <a href="#" onclick="navigateTo('home')" class="text-2xl font-bold text-emerald-600">Akademia Pisemnictwa</a>
@@ -43,11 +49,13 @@
             </nav>
         </header>
 
+        <!-- Główna zawartość -->
         <main class="flex-grow container mx-auto px-4 py-8">
             <div id="view-container">
             </div>
         </main>
 
+        <!-- Stopka -->
         <footer class="bg-gray-800 text-white py-4 text-center">
             <p class="text-sm">&copy; 2024 Akademia Pisemnictwa. Wszelkie prawa zastrzeżone.</p>
         </footer>
@@ -56,8 +64,10 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // DODANO: collection, query, addDoc do operacji na materiałach publicznych
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
+        // --- ZMIENNE GLOBALNE ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
         const firebaseConfig = {
@@ -71,13 +81,27 @@
         };
         
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        const FORMSPREE_URL = 'https://formspree.io/f/mkgkwena';
+        
+        // Formspree URL dla powiadomienia do ADMINISTRATORA (o nową rejestrację)
+        const FORMSPREE_ADMIN_NOTIFICATION_URL = 'https://formspree.io/f/mkgkwena'; 
+
+        // Formspree URL dla wiadomości powitalnej do UŻYTKOWNIKA
+        // UWAGA: Zastąp ten link swoim własnym, dedykowanym do wiadomości powitalnej
+        const FORMSPREE_WELCOME_URL = 'https://formspree.io/f/mknenrno'; 
 
         let app, db, auth;
         let userId = null;
         let isAuthReady = false;
         let userProfile = null;
         let currentView = 'home';
+        let selectedClass = 4; // Filtr klasy dla Klubu Nauczyciela
+
+        let materialState = {
+            allMaterials: [], // Zastępuje hardkodowaną tablicę 'materials'
+            unsubscribe: null, // Subskrypcja nasłuchiwania materiałów
+            viewMode: 'view' // 'view' (lista) lub 'add' (formularz admina)
+        };
+
 
         const viewContainer = document.getElementById('view-container');
         const authButton = document.getElementById('auth-button');
@@ -85,14 +109,162 @@
         const loadingOverlay = document.getElementById('loading-overlay');
         const loadingText = document.getElementById('loading-text');
 
+        // --- FUNKCJE POMOCNICZE FIRESTORE ---
+
         const setLoading = (show, text = 'Ładowanie...') => {
             loadingText.textContent = text;
             loadingOverlay.classList.toggle('hidden', !show);
         };
 
+        const alertMessage = (message, bgColorClass = 'bg-red-600') => {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 ${bgColorClass} text-white p-4 rounded-lg shadow-xl z-[999] opacity-0 transition-opacity duration-300`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => { notification.classList.add('opacity-100'); }, 10);
+            setTimeout(() => { notification.classList.remove('opacity-100'); }, 4000);
+            setTimeout(() => { notification.remove(); }, 5000);
+        };
+
         const getUserProfileRef = (uid) => {
             return doc(db, `artifacts/${appId}/users/${uid}/academy_profiles/data`);
         }
+        
+        const getMaterialsCollectionRef = () => {
+            return collection(db, `artifacts/${appId}/public/data/materials`);
+        };
+
+        // --- FUNKCJE WYSYŁKI E-MAIL (FORMSPREE) ---
+
+        /**
+         * Wysyła powiadomienie do administratora o nowej rejestracji w celu weryfikacji.
+         * Używa FORMSPREE_ADMIN_NOTIFICATION_URL
+         */
+        const sendFormspreeAdminNotification = async (userData) => {
+            try {
+                const response = await fetch(FORMSPREE_ADMIN_NOTIFICATION_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        'subject': `[AKADEMIA PISARSTWA] Nowy wniosek o weryfikację: ${userData.fullName}`,
+                        'Imię i Nazwisko': userData.fullName,
+                        'Email (do weryfikacji)': userData.email,
+                        'Telefon': userData.phone || 'Brak',
+                        'Status': userData.verificationStatus,
+                        'Komentarz': 'Proszę o sprawdzenie i nadanie roli/statusu w konsoli Firebase.'
+                    })
+                });
+                if (!response.ok) {
+                    console.error('Błąd wysyłki powiadomienia do admina (Formspree).', response.statusText);
+                }
+            } catch (error) {
+                console.error('Błąd połączenia Formspree (admin):', error);
+            }
+        };
+
+        /**
+         * Wysyła e-mail powitalny do nowo zarejestrowanego użytkownika z niestandardowym formatowaniem.
+         * Używa FORMSPREE_WELCOME_URL i pola _replyto jako adresu odbiorcy.
+         */
+        const sendWelcomeEmail = async (userData) => {
+            const firstName = userData.fullName.split(' ')[0];
+            
+            // CAŁA formatowana treść E-MAIL w HTML - TO POLE BĘDZIE WYŚWIETLONE PRZEZ FORMSPREE
+            const htmlMessage = `
+                <div style="font-family: 'Inter', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+                    
+                    <!-- Nagłówek E-maila -->
+                    <div style="background-color: #059669; color: #ffffff; padding: 20px; text-align: center; border-bottom: 5px solid #10b981;">
+                        <h1 style="margin: 0; font-size: 24px;">Akademia Pisemnictwa</h1>
+                        <p style="margin: 5px 0 0; font-size: 14px;">Klub Plików dla Nauczycieli Polskiego</p>
+                    </div>
+
+                    <!-- Treść Główna -->
+                    <div style="padding: 30px; background-color: #ffffff;">
+                        <h2 style="color: #10b981; font-size: 22px; margin-top: 0;">Witaj, ${firstName}! Dziękujemy za rejestrację!</h2>
+                        
+                        <p>Z radością informujemy, że Twoje konto zostało pomyślnie utworzone. Jesteśmy dumni, że dołączasz do naszej społeczności polonistów!</p>
+
+                        <div style="margin: 20px 0; padding: 15px; border-left: 4px solid #f59e0b; background-color: #fffbeb;">
+                            <p style="margin: 0; color: #78350f; font-weight: 600;">Status Twojego konta: WERYFIKACJA W TRAKCIE.</p>
+                            <p style="margin: 5px 0 0; font-size: 14px; color: #78350f;">Dostęp do Klubu Nauczyciela uzyskasz po weryfikacji, która trwa do 5 dni roboczych.</p>
+                        </div>
+
+                        <p>W każdej chwili możesz sprawdzić status swojego konta, logując się do Panelu Głównego:</p>
+                        
+                        <!-- Przycisk CTA -->
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="https://twoj-adres-aplikacji.com/dashboard" 
+                                style="background-color: #10b981; color: #ffffff; padding: 12px 25px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">
+                                Przejdź do Panelu Głównego
+                            </a>
+                        </div>
+                        
+                        <p>Pozdrawiamy serdecznie,</p>
+                        <p style="font-weight: bold; color: #059669;">Zespół Akademii Pisemnictwa</p>
+                    </div>
+
+                    <!-- Stopka E-maila -->
+                    <div style="background-color: #f3f4f6; padding: 20px; text-align: center; font-size: 12px; color: #6b7280;">
+                        <p style="margin: 0;">&copy; 2024 Akademia Pisemnictwa. Wszelkie prawa zastrzeżone.</p>
+                        <p style="margin: 5px 0 0;">Otrzymałeś tę wiadomość, ponieważ zarejestrowałeś się w naszym systemie.</p>
+                    </div>
+                </div>
+            `;
+
+            try {
+                // Wywołanie Formspree
+                const response = await fetch(FORMSPREE_WELCOME_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        // Ten nagłówek mówi Formspree, aby wysłał wiadomość na ten adres
+                        '_replyto': userData.email, 
+                        // To jest tytuł maila
+                        'subject': `Witaj w Akademii Pisemnictwa, ${firstName}!`,
+                        // To jest formatowana treść HTML
+                        'message': htmlMessage, 
+                        'Imię': firstName
+                    })
+                });
+                
+                if (!response.ok) {
+                    console.error('Błąd wysyłki wiadomości powitalnej (Formspree).', response.statusText);
+                }
+            } catch (error) {
+                console.error('Błąd połączenia Formspree (powitalny):', error);
+            }
+        };
+
+
+        // --- NASŁUCHIWANIE I INICJALIZACJA ---
+
+        const listenToMaterials = () => {
+            if (materialState.unsubscribe) {
+                materialState.unsubscribe(); // Czyści starą subskrypcję
+            }
+
+            // Ustawia nasłuchiwanie na publiczną kolekcję materiałów
+            const q = query(getMaterialsCollectionRef());
+            
+            materialState.unsubscribe = onSnapshot(q, (snapshot) => {
+                const materialsList = [];
+                snapshot.forEach((doc) => {
+                    materialsList.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // Sortowanie materiałów po klasie
+                materialsList.sort((a, b) => a.classLevel - b.classLevel); 
+                materialState.allMaterials = materialsList;
+                
+                // Odświeżenie widoku Klubu Nauczyciela, jeśli jest aktywny
+                if (currentView === 'filesClub' && materialState.viewMode === 'view') {
+                    renderFilesClubViewContent();
+                }
+            }, (error) => {
+                console.error("Błąd nasłuchiwania materiałów:", error);
+            });
+        };
 
         const setupFirebase = async () => {
             navigateTo('home');
@@ -101,17 +273,20 @@
                 db = getFirestore(app);
                 auth = getAuth(app);
 
+                // Autoryzacja
                 if (initialAuthToken) {
                     await signInWithCustomToken(auth, initialAuthToken);
                 } else {
                     await signInAnonymously(auth);
                 }
 
+                // Nasłuchiwanie stanu autoryzacji
                 onAuthStateChanged(auth, (user) => {
                     userId = user ? user.uid : null;
                     isAuthReady = true;
                     if (user && user.email) {
                         listenToUserProfile(user.uid);
+                        listenToMaterials(); // Rozpocznij nasłuchiwanie materiałów
                     } else {
                         userProfile = null;
                         updateAuthUI(user);
@@ -150,20 +325,21 @@
             });
         };
 
-        const checkVerificationStatus = (forceVerificationCheck = false) => {
-            if (!auth.currentUser) {
+        const checkVerificationStatus = (isFilesClubAttempt = false) => {
+            if (!auth.currentUser || !userProfile) {
                 navigateTo('home');
                 return;
             }
 
-            if (userProfile && userProfile.verificationStatus === 'verified') {
+            const status = userProfile?.verificationStatus;
+
+            if (status === 'verified') {
                 navigateTo('filesClub');
-            } else if (userProfile) { 
-                if (forceVerificationCheck) {
-                    navigateTo('verificationStatusCheck');
-                } else {
-                    navigateTo('dashboard');
+            } else if (status === 'pending' || status === 'false' || !userProfile) { 
+                if (isFilesClubAttempt) {
+                    alertMessage("Dostęp do Klubu Nauczyciela wymaga pomyślnej weryfikacji konta. Sprawdź status w Panelu Głównym.");
                 }
+                navigateTo('dashboard');
             } else {
                 navigateTo('home');
             }
@@ -199,16 +375,126 @@
                 navigateTo('auth');
             }
         };
+
+        // --- OBSŁUGA FORMULARZY ---
         
-        const alertMessage = (message) => {
-            const notification = document.createElement('div');
-            notification.className = 'fixed top-4 right-4 bg-red-600 text-white p-4 rounded-lg shadow-xl z-[999] opacity-0 transition-opacity duration-300';
-            notification.textContent = message;
-            document.body.appendChild(notification);
-            setTimeout(() => { notification.classList.add('opacity-100'); }, 10);
-            setTimeout(() => { notification.classList.remove('opacity-100'); }, 4000);
-            setTimeout(() => { notification.remove(); }, 5000);
+        const handleAuthFormSubmit = (event) => {
+            event.preventDefault();
+            const form = event.target;
+            const isRegister = form.querySelector('#fullName') !== null;
+            
+            if (isRegister) {
+                const fullName = form.querySelector('#fullName').value.trim();
+                const email = form.querySelector('#email').value.trim();
+                const phone = form.querySelector('#phone').value.trim();
+                const password = form.querySelector('#password').value;
+                const confirmPassword = form.querySelector('#confirmPassword').value;
+
+                if (password !== confirmPassword) {
+                    alertMessage('Hasła nie są identyczne!');
+                    return;
+                }
+                registerUser(fullName, email, phone, password);
+            } else {
+                const email = form.querySelector('#loginEmail').value.trim();
+                const password = form.querySelector('#loginPassword').value;
+                signInUser(email, password);
+            }
         };
+
+        const registerUser = async (fullName, email, phone, password) => {
+            setLoading(true, 'Rejestrowanie użytkownika...');
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const uid = userCredential.user.uid;
+                
+                const userData = {
+                    fullName: fullName,
+                    email: email,
+                    phone: phone,
+                    verificationStatus: 'pending', 
+                    role: 'USER', // Domyślna rola
+                };
+                
+                // 1. Zapis profilu w Firestore
+                await setDoc(getUserProfileRef(uid), userData);
+
+                // 2. Wysyłanie maila/powiadomienia o nowym użytkowniku do administratora
+                await sendFormspreeAdminNotification(userData); 
+
+                // 3. Wysyłanie maila powitalnego do użytkownika
+                await sendWelcomeEmail(userData); 
+
+                alertMessage('Rejestracja udana! Sprawdź skrzynkę odbiorczą.', 'bg-emerald-600');
+                navigateTo('verificationStatusCheck');
+            } catch (error) {
+                console.error("Błąd rejestracji:", error);
+                alertMessage(`Błąd rejestracji: ${error.message}`);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        const signInUser = async (email, password) => {
+            setLoading(true, 'Logowanie...');
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                alertMessage('Zalogowano pomyślnie!', 'bg-emerald-600');
+                // navigateTo() jest obsługiwane przez onAuthStateChanged/listenToUserProfile
+            } catch (error) {
+                console.error("Błąd logowania:", error);
+                alertMessage(`Błąd logowania: ${error.message}`);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        const signOutUser = async () => {
+            setLoading(true, 'Wylogowywanie...');
+            try {
+                await signOut(auth);
+                userProfile = null;
+                alertMessage('Wylogowano pomyślnie.', 'bg-emerald-600');
+                navigateTo('home');
+            } catch (error) {
+                console.error("Błąd wylogowania:", error);
+                alertMessage(`Błąd wylogowania: ${error.message}`);
+            } finally {
+                setLoading(false);
+            }
+        };
+        
+        const handleAddMaterialSubmit = async (event) => {
+            event.preventDefault();
+            setLoading(true, 'Zapisywanie materiału...');
+
+            const form = event.target;
+            const newMaterial = {
+                title: form.querySelector('#materialTitle').value.trim(),
+                description: form.querySelector('#materialDescription').value.trim(),
+                classLevel: parseInt(form.querySelector('#materialClassLevel').value, 10),
+                type: form.querySelector('#materialType').value.trim(),
+                size: form.querySelector('#materialSize').value.trim(),
+                url: form.querySelector('#materialUrl').value.trim(),
+                createdAt: new Date().toISOString(),
+                author: userProfile?.fullName || 'Admin',
+            };
+
+            try {
+                await addDoc(getMaterialsCollectionRef(), newMaterial);
+                alertMessage('Materiał dodany pomyślnie!', 'bg-emerald-600');
+                materialState.viewMode = 'view';
+                navigateTo('filesClub');
+            } catch (error) {
+                console.error("Błąd dodawania materiału:", error);
+                alertMessage(`Błąd zapisu: ${error.message}`);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+
+        // --- WIDOKI ---
 
         window.navigateTo = (view) => {
             currentView = view;
@@ -216,6 +502,21 @@
             window.scrollTo(0, 0);
         };
         
+        window.setFilterClass = (classLevel) => {
+            selectedClass = classLevel;
+            renderFilesClubViewContent();
+        }
+        
+        window.toggleAdminView = (mode) => {
+            materialState.viewMode = mode;
+            navigateTo('filesClub'); // Wymuś ponowne renderowanie
+        };
+
+        window.switchAuthMode = (isRegister) => {
+            viewContainer.innerHTML = renderAuthView(isRegister);
+            document.getElementById('auth-form').addEventListener('submit', handleAuthFormSubmit);
+        };
+
         const renderHomeView = () => `
             <div class="hero-bg text-white p-12 md:p-20 rounded-xl shadow-2xl text-center">
                 <h1 class="text-4xl md:text-6xl font-extrabold mb-4">Akademia Pisemnictwa</h1>
@@ -279,268 +580,235 @@
 
         const renderDashboardView = () => {
             const userName = userProfile ? userProfile.fullName.split(' ')[0] : 'Użytkowniku';
-            return `
-                <div class="bg-white p-8 rounded-xl shadow-2xl border-t-4 border-emerald-600 text-center">
-                    <h2 class="text-4xl font-bold mb-4 text-gray-800">Witaj, ${userName}!</h2>
-                    <p class="text-xl text-gray-600 mb-8">Jak Ci mija dzisiejszy dzień?</p>
-                    <p class="text-gray-500">Przejdź do <b>Klubu Nauczyciela</b>, aby uzyskać dostęp do materiałów, lub poczekaj na weryfikację konta.</p>
-                    <button onclick="checkVerificationStatus(true)" class="mt-6 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-6 rounded-lg btn-primary shadow-md">
+            const status = userProfile?.verificationStatus;
+            
+            let statusMessageHtml;
+            let statusClass = "border-emerald-600";
+
+            if (status === 'verified') {
+                statusMessageHtml = `
+                    <p class="text-lg text-gray-600 mb-8">Jak Ci mija dzisiejszy dzień? Twoje konto jest <b>ZWERYFIKOWANE</b>. Pełen dostęp do Klubu Nauczyciela czeka!</p>
+                    <button onclick="navigateTo('filesClub')" class="mt-6 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-6 rounded-lg btn-primary shadow-md">
                         Przejdź do Klubu Nauczyciela
                     </button>
+                `;
+            } else if (status === 'false') {
+                statusClass = "border-red-600";
+                statusMessageHtml = `
+                    <h3 class="text-2xl font-bold mb-4 text-red-600">Twoje konto nie zostało zweryfikowane</h3>
+                    <p class="text-gray-700 font-medium mb-4">Skontaktuj się z nami w celu wyjaśnienia statusu.</p>
+                    <div class="text-left bg-red-50 p-6 rounded-lg border border-red-200">
+                        <p class="font-semibold text-gray-800 mt-4 mb-2">Skontaktuj się z nami:</p>
+                        <ul class="list-disc list-inside space-y-1 text-sm text-gray-600">
+                            <li><span class="font-medium text-red-600">Sprawy weryfikacji konta:</span> <a href="mailto:weryfikacja.osc4r@hub.pl" class="text-blue-600 hover:underline">weryfikacja.osc4r@hub.pl</a></li>
+                            <li><span class="font-medium text-red-600">Inne zapytania:</span> <a href="mailto:centrumobslugiklienta@osc4r.hub.pl" class="text-blue-600 hover:underline">centrumobslugiklienta@osc4r.hub.pl</a></li>
+                        </ul>
+                        <p class="mt-4 text-sm text-gray-500">Odpowiemy w ciągu 5 dni roboczych.</p>
+                    </div>
+                `;
+            } else { 
+                statusClass = "border-yellow-500";
+                statusMessageHtml = `
+                    <h3 class="text-2xl font-bold mb-4 text-yellow-600">Twoje konto jest w trakcie weryfikacji</h3>
+                    <p class="text-lg text-gray-600 mb-8">Jak Ci mija dzisiejszy dzień? Czekamy na potwierdzenie Twoich danych.</p>
+                    <p class="text-gray-500">Dostęp do Klubu Nauczyciela uzyskasz po zakończeniu weryfikacji (do 5 dni roboczych).</p>
+                `;
+            }
+
+            return `
+                <div class="bg-white p-8 rounded-xl shadow-2xl border-t-4 ${statusClass} text-center">
+                    <h2 class="text-4xl font-bold mb-4 text-gray-800">Witaj, ${userName}!</h2>
+                    ${statusMessageHtml}
                 </div>
             `;
         };
 
         const renderVerificationStatusView = () => {
-            const isPending = userProfile && userProfile.verificationStatus === 'pending';
             const userName = userProfile ? userProfile.fullName.split(' ')[0] : 'Użytkowniku';
             
-            let title, messageHtml;
-
-            if (isPending) {
-                title = 'Trwa weryfikacja konta';
-                messageHtml = `
-                    <p class="text-gray-700 mb-4">Twój wniosek został przyjęty do weryfikacji. Proces ten potrwa do <b>5 dni roboczych</b>. O pozytywnej weryfikacji poinformujemy Cię mailowo.</p>
-                `;
-            } else {
-                title = 'Konto Wymaga Weryfikacji';
-                messageHtml = `
-                    <p class="text-gray-700 font-medium mb-4">Twoje konto nie zostało zweryfikowane. Skontaktuj się z nami w celu wyjaśnienia statusu.</p>
-                `;
-            }
-
-            const sharedContactHtml = `
-                <p class="font-semibold text-gray-800 mt-4 mb-2">Skontaktuj się z nami:</p>
-                <ul class="list-disc list-inside space-y-1 text-sm text-gray-600">
-                    <li><span class="font-medium text-emerald-600">Sprawy weryfikacji konta:</span> <a href="mailto:weryfikacja.osc4r@hub.pl" class="text-blue-600 hover:underline">weryfikacja.osc4r@hub.pl</a></li>
-                    <li><span class="font-medium text-emerald-600">Inne zapytania:</span> <a href="mailto:centrumobslugiklienta@osc4r.hub.pl" class="text-blue-600 hover:underline">centrumobslugiklienta@osc4r.hub.pl</a></li>
-                </ul>
-                <p class="mt-4 text-sm text-gray-500">Odpowiemy w ciągu 5 dni roboczych.</p>
-            `;
-
-
             return `
                 <div class="max-w-xl mx-auto bg-white p-10 rounded-xl shadow-2xl border-l-4 border-yellow-500 text-center">
                     <svg class="w-16 h-16 text-yellow-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                    <h2 class="text-3xl font-bold mb-4 text-gray-800">${title}</h2>
+                    <h2 class="text-3xl font-bold mb-4 text-gray-800">Wniosek Wysłany</h2>
                     <p class="text-gray-600 mb-6 text-lg">Witaj, <b>${userName}</b>!</p>
                     
-                    <div class="text-left bg-gray-50 p-6 rounded-lg border border-gray-200">
-                        ${messageHtml}
-                        ${sharedContactHtml}
+                    <div class="text-left bg-yellow-50 p-6 rounded-lg border border-yellow-200">
+                        <p class="text-gray-700 mb-4">Twój wniosek o weryfikację konta został przyjęty. Proces ten potrwa do <b>5 dni roboczych</b>.</p>
+                        <p class="text-gray-700 font-medium"><b>Sprawdź też swoją skrzynkę mailową</b> — wysłaliśmy Ci wiadomość powitalną. Dostęp do Klubu Nauczyciela uzyskasz po zakończeniu weryfikacji. Wróć do <a href="#" onclick="navigateTo('dashboard')" class="text-emerald-600 hover:underline font-semibold">Panelu Głównego</a>, aby sprawdzić status.</p>
                     </div>
 
                     <button onclick="signOutUser()" class="mt-8 text-sm text-red-500 hover:text-red-700 transition">Wyloguj</button>
                 </div>
             `;
         };
+        
+        const renderFilesClubViewContent = () => {
+            // Użycie dynamicznie ładowanych materiałów z Firestore
+            const filteredMaterials = materialState.allMaterials.filter(m => m.classLevel === selectedClass);
+            
+            const classButtons = [4, 5, 6, 7, 8].map(cls => `
+                <button 
+                    onclick="setFilterClass(${cls})" 
+                    class="py-2 px-4 rounded-full font-semibold transition duration-150 ease-in-out ${selectedClass === cls ? 'bg-emerald-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-emerald-100'}"
+                >
+                    Klasa ${cls}
+                </button>
+            `).join('');
 
-        const renderFilesClubView = () => `
-            <div class="bg-white p-8 rounded-xl shadow-2xl border-t-4 border-emerald-600">
-                <h2 class="text-4xl font-bold mb-6 text-emerald-700">🏆 Klub Plików - Strefa Premium</h2>
-                <p class="text-lg text-gray-700 mb-8">Witaj w miejscu, gdzie znajdziesz sprawdzone, gotowe do użycia materiały. Dostęp tylko dla zweryfikowanych członków.</p>
-
-                <div class="grid md:grid-cols-2 gap-6">
-                    <div class="bg-gray-50 p-5 rounded-lg border border-gray-200 hover:shadow-md transition duration-150">
-                        <h3 class="text-2xl font-semibold mb-2 text-gray-800">Egzamin Ósmoklasisty: Analiza Lektur</h3>
-                        <p class="text-gray-600">Szczegółowe streszczenia, motywy i gotowe tezy do najczęściej spotykanych lektur. Format PDF.</p>
-                        <a href="#" class="mt-3 inline-block text-emerald-600 font-medium hover:underline">Pobierz plik PDF (2.5 MB)</a>
+            const materialsHtml = filteredMaterials.length > 0 ? filteredMaterials.map(m => `
+                <div class="bg-gray-50 p-5 rounded-lg border border-gray-200 hover:shadow-lg transition duration-150">
+                    <h3 class="text-2xl font-semibold mb-2 text-gray-800">${m.title}</h3>
+                    <p class="text-gray-600 mb-3">${m.description}</p>
+                    <div class="flex justify-between items-center text-sm text-gray-500">
+                        <span>Typ: <b>${m.type}</b></span>
+                        <span>Rozmiar: <b>${m.size}</b></span>
                     </div>
-                    <div class="bg-gray-50 p-5 rounded-lg border border-gray-200 hover:shadow-md transition duration-150">
-                        <h3 class="text-2xl font-semibold mb-2 text-gray-800">10 Szablonów Wypracowań Wnioskujących</h3>
-                        <p class="text-gray-600">Struktury logiczne do tworzenia przekonujących argumentów. Plik DOCX/ODT.</p>
-                        <a href="#" class="mt-3 inline-block text-emerald-600 font-medium hover:underline">Pobierz plik DOCX (0.8 MB)</a>
-                    </div>
-                    <div class="bg-gray-50 p-5 rounded-lg border border-gray-200 hover:shadow-md transition duration-150">
-                        <h3 class="text-2xl font-semibold mb-2 text-gray-800">Checklista do Oceny Eseju</h3>
-                        <p class="text-gray-600">Kompleksowa lista kryteriów oceniania dla nauczycieli i samooceny dla uczniów.</p>
-                        <a href="#" class="mt-3 inline-block text-emerald-600 font-medium hover:underline">Otwórz Arkusz Google</a>
-                    </div>
-                    <div class="bg-gray-50 p-5 rounded-lg border border-gray-200 hover:shadow-md transition duration-150">
-                        <h3 class="text-2xl font-semibold mb-2 text-gray-800">Wideo: Jak Pisać Wstęp?</h3>
-                        <p class="text-gray-600">Nagranie wideo z kursu o skutecznym i angażującym wstępie do każdej pracy pisemnej.</p>
-                        <a href="#" class="mt-3 inline-block text-emerald-600 font-medium hover:underline">Obejrzyj Wideo</a>
-                    </div>
+                    <a href="${m.url}" target="_blank" rel="noopener noreferrer" class="mt-3 inline-block text-emerald-600 font-medium hover:underline">Pobierz Materiał</a>
                 </div>
-            </div>
-        `;
+            `).join('') : `<p class="col-span-full text-center text-gray-500 py-10">Brak materiałów dla wybranej klasy. Pracujemy nad ich dodaniem!</p>`;
+
+            const classFiltersElement = document.getElementById('class-filters');
+            if (classFiltersElement) {
+                classFiltersElement.innerHTML = classButtons;
+            }
+            const materialsListElement = document.getElementById('materials-list');
+            if (materialsListElement) {
+                materialsListElement.innerHTML = materialsHtml;
+            }
+        };
+
+        const renderAddMaterialForm = () => {
+            return `
+                <div class="max-w-xl mx-auto bg-gray-50 p-8 rounded-xl shadow-lg border-t-4 border-indigo-600">
+                    <div class="flex justify-between items-start mb-6">
+                        <h3 class="text-3xl font-bold text-indigo-700">Dodaj Nowy Materiał (ADMIN)</h3>
+                        <button onclick="toggleAdminView('view')" class="text-sm text-gray-500 hover:text-gray-700 flex items-center">
+                             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Wróć do listy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 mb-6">Wprowadź szczegóły nowego pliku, który będzie dostępny dla zweryfikowanych nauczycieli. Upewnij się, że URL jest poprawny.</p>
+                    
+                    <form id="add-material-form">
+                        <div class="mb-4">
+                            <label for="materialTitle" class="block text-sm font-medium text-gray-700 mb-1">Tytuł Materiału</label>
+                            <input type="text" id="materialTitle" required class="input-field w-full p-3 border border-gray-300 rounded-lg focus:outline-none"/>
+                        </div>
+                        <div class="mb-4">
+                            <label for="materialDescription" class="block text-sm font-medium text-gray-700 mb-1">Opis</label>
+                            <textarea id="materialDescription" required rows="3" class="input-field w-full p-3 border border-gray-300 rounded-lg focus:outline-none"></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label for="materialClassLevel" class="block text-sm font-medium text-gray-700 mb-1">Klasa</label>
+                                <select id="materialClassLevel" required class="input-field w-full p-3 border border-gray-300 rounded-lg focus:outline-none">
+                                    <option value="4">Klasa 4</option>
+                                    <option value="5">Klasa 5</option>
+                                    <option value="6">Klasa 6</option>
+                                    <option value="7">Klasa 7</option>
+                                    <option value="8">Klasa 8</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="materialType" class="block text-sm font-medium text-gray-700 mb-1">Typ Pliku</label>
+                                <select id="materialType" required class="input-field w-full p-3 border border-gray-300 rounded-lg focus:outline-none">
+                                    <option value="PDF">PDF</option>
+                                    <option value="DOCX">DOCX</option>
+                                    <option value="Arkusz Google">Arkusz Google</option>
+                                    <option value="Wideo">Wideo</option>
+                                    <option value="Inny">Inny</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label for="materialSize" class="block text-sm font-medium text-gray-700 mb-1">Rozmiar (np. '1.5 MB', 'Online')</label>
+                                <input type="text" id="materialSize" required class="input-field w-full p-3 border border-gray-300 rounded-lg focus:outline-none"/>
+                            </div>
+                            <div>
+                                <label for="materialUrl" class="block text-sm font-medium text-gray-700 mb-1">Link do Pliku (URL)</label>
+                                <input type="url" id="materialUrl" required class="input-field w-full p-3 border border-gray-300 rounded-lg focus:outline-none"/>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg btn-primary shadow-md">
+                            Zapisz Materiał w Bazie Firestore
+                        </button>
+                    </form>
+                </div>
+            `;
+        };
+
+        const renderFilesClubView = () => {
+            if (!userProfile || userProfile.verificationStatus !== 'verified') {
+                checkVerificationStatus(true);
+                return '';
+            }
+            
+            const isAdmin = userProfile.role === 'ADMIN';
+
+            if (materialState.viewMode === 'add' && isAdmin) {
+                return renderAddMaterialForm();
+            }
+            
+            // Widok listy materiałów
+            return `
+                <div class="bg-white p-8 rounded-xl shadow-2xl border-t-4 border-emerald-600">
+                    <div class="flex justify-between items-start mb-6">
+                        <h2 class="text-4xl font-bold text-emerald-700">🏆 Klub Nauczyciela - Materiały Dydaktyczne</h2>
+                        ${isAdmin ? `
+                            <button onclick="toggleAdminView('add')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center whitespace-nowrap">
+                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                Dodaj Materiał
+                            </button>
+                        ` : ''}
+                    </div>
+                    <p class="text-lg text-gray-700 mb-8">Poniżej znajdziesz materiały pogrupowane według klas 4-8. Wybierz klasę, aby filtrować zasoby. Obecnie widzisz <b>${materialState.allMaterials.length}</b> materiałów w systemie.</p>
+
+                    <div id="class-filters" class="flex flex-wrap gap-3 mb-8">
+                    </div>
+
+                    <div id="materials-list" class="grid md:grid-cols-2 gap-6">
+                        <!-- Materiały ładowane przez renderFilesClubViewContent -->
+                    </div>
+                    ${materialState.allMaterials.length === 0 ? `<div class="text-center py-10 text-gray-500 italic">Brak materiałów w bazie. Administratorze, dodaj pierwszy plik!</div>` : ''}
+                </div>
+            `;
+        };
+
 
         const render = () => {
             viewContainer.style.opacity = '0';
+            viewContainer.style.transform = 'perspective(1000px) translateY(20px) scale(0.98)';
             
             let htmlContent;
             switch (currentView) {
-                case 'home':
-                    htmlContent = renderHomeView();
-                    break;
-                case 'auth':
-                    htmlContent = renderAuthView(false); 
-                    break;
-                case 'dashboard':
-                    htmlContent = renderDashboardView();
-                    break;
-                case 'verificationStatusCheck':
-                    htmlContent = renderVerificationStatusView();
-                    break;
-                case 'filesClub':
-                    if (userProfile && userProfile.verificationStatus === 'verified') {
-                        htmlContent = renderFilesClubView();
-                    } else {
-                        if (auth.currentUser) {
-                            navigateTo('verificationStatusCheck');
-                        } else {
-                            navigateTo('home');
-                        }
-                    }
-                    break;
-                default:
-                    htmlContent = renderHomeView();
+                case 'home': htmlContent = renderHomeView(); break;
+                case 'auth': htmlContent = renderAuthView(false); break;
+                case 'dashboard': htmlContent = renderDashboardView(); break;
+                case 'verificationStatusCheck': htmlContent = renderVerificationStatusView(); break;
+                case 'filesClub': htmlContent = renderFilesClubView(); break;
+                default: htmlContent = renderHomeView();
             }
             viewContainer.innerHTML = htmlContent;
             
             setTimeout(() => {
                 viewContainer.style.opacity = '1';
+                viewContainer.style.transform = 'perspective(1000px) translateY(0) scale(1)';
                 
                 if (currentView === 'auth') {
                     document.getElementById('auth-form').addEventListener('submit', handleAuthFormSubmit);
+                } else if (currentView === 'filesClub' && userProfile?.verificationStatus === 'verified') {
+                    if (materialState.viewMode === 'view') {
+                        renderFilesClubViewContent();
+                    } else if (materialState.viewMode === 'add') {
+                        document.getElementById('add-material-form').addEventListener('submit', handleAddMaterialSubmit);
+                    }
                 }
-            }, 10);
+            }, 600);
         };
 
-        window.switchAuthMode = (isRegister) => {
-            const authCard = document.getElementById('auth-card');
-            authCard.innerHTML = renderAuthView(isRegister).match(/<form[\s\S]*<\/div>/)[0];
-            document.getElementById('auth-form').addEventListener('submit', handleAuthFormSubmit);
-        };
-
-        const handleAuthFormSubmit = async (event) => {
-            event.preventDefault();
-            const form = event.target;
-            
-            if (form.querySelector('#fullName')) {
-                const fullName = form.querySelector('#fullName').value.trim();
-                const email = form.querySelector('#email').value.trim();
-                const phone = form.querySelector('#phone').value.trim();
-                const password = form.querySelector('#password').value;
-                const confirmPassword = form.querySelector('#confirmPassword').value;
-
-                if (password.length < 6) {
-                    alertMessage('Hasło musi mieć co najmniej 6 znaków.');
-                    return;
-                }
-                if (password !== confirmPassword) {
-                    alertMessage('Hasła nie są identyczne!');
-                    return;
-                }
-                
-                await registerUser({ fullName, email, phone, password });
-
-            } else {
-                const email = form.querySelector('#loginEmail').value.trim();
-                const password = form.querySelector('#loginPassword').value;
-                
-                await loginUser(email, password);
-            }
-        };
-
-        const sendFormspreeNotification = async (userData) => {
-            setLoading(true, "Wysyłanie powiadomienia...");
-            try {
-                const response = await fetch(FORMSPREE_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        'Weryfikacja': 'NOWA REJESTRACJA WYMAGAJĄCA WERYFIKACJI',
-                        'Imię i Nazwisko': userData.fullName,
-                        'Email': userData.email,
-                        'Numer Telefonu': userData.phoneNumber || 'Brak',
-                        'Data Rejestracji': new Date().toLocaleString('pl-PL'),
-                        'Status': 'PENDING'
-                    })
-                });
-
-                if (response.ok) {
-                } else {
-                    console.error("Błąd wysyłania Formspree:", response.statusText);
-                }
-            } catch (error) {
-                console.error("Błąd sieci Formspree:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        const registerUser = async (data) => {
-            setLoading(true, "Tworzenie konta...");
-            
-            try {
-                const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-                const uid = userCredential.user.uid;
-
-                const userData = {
-                    fullName: data.fullName,
-                    email: data.email,
-                    phoneNumber: data.phone || null,
-                    registrationDate: new Date().toISOString(),
-                    verificationStatus: 'pending'
-                };
-                
-                await setDoc(getUserProfileRef(uid), userData);
-
-                await sendFormspreeNotification(userData);
-
-                setLoading(false);
-
-            } catch (error) {
-                setLoading(false);
-                let errorMessage = 'Wystąpił nieznany błąd podczas rejestracji.';
-                if (error.code === 'auth/email-already-in-use') {
-                    errorMessage = 'Ten adres e-mail jest już zarejestrowany.';
-                } else if (error.code === 'auth/weak-password') {
-                    errorMessage = 'Hasło jest za słabe. Użyj co najmniej 6 znaków.';
-                } else {
-                    console.error("Błąd rejestracji:", error);
-                    errorMessage = `Błąd Firebase: ${error.message}`;
-                }
-                alertMessage(errorMessage);
-                if (auth.currentUser && !auth.currentUser.isAnonymous) {
-                     await signOut(auth);
-                }
-            }
-        };
-
-        const loginUser = async (email, password) => {
-            setLoading(true, "Logowanie...");
-            try {
-                await signInWithEmailAndPassword(auth, email, password);
-            } catch (error) {
-                setLoading(false);
-                console.error("Błąd logowania:", error);
-                let errorMessage = 'Błąd logowania. Sprawdź e-mail i hasło.';
-                if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-                    errorMessage = 'Nieprawidłowy adres e-mail lub hasło.';
-                }
-                alertMessage(errorMessage);
-            }
-        };
-
-        window.signOutUser = async () => {
-            setLoading(true, "Wylogowywanie...");
-            try {
-                await signOut(auth);
-                userProfile = null;
-            } catch (error) {
-                console.error("Błąd wylogowania:", error);
-                alertMessage(`Błąd wylogowania: ${error.message}`);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        window.onload = setupFirebase;
+        // --- INICJALIZACJA ---
+        setupFirebase();
 
     </script>
 </body>
