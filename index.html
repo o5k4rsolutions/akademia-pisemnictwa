@@ -3,813 +3,619 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Akademia Pisemnictwa - Klub Plików</title>
+    <title>Klub Nauczyciela: Akademia Pisemnictwa</title>
+    <!-- Ładowanie Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Konfiguracja czcionki -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #f7f9fb; }
-        .hero-bg { background-image: linear-gradient(135deg, #10b981 0%, #059669 100%); }
-        .btn-primary { transition: all 0.2s; }
-        .btn-primary:hover { box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); }
-        .input-field:focus { border-color: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3); }
-        
-        #view-container { 
-            transition: opacity 0.6s ease-out, transform 0.6s ease-out; 
-            transform: perspective(1000px) translateY(0) scale(1);
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fc;
+        }
+        .card {
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+        .button-primary {
+            background-color: #4f46e5;
+            transition: all 0.3s ease;
+        }
+        .button-primary:hover {
+            background-color: #4338ca;
+            transform: translateY(-1px);
+        }
+        .pdf-download-btn {
+            background-color: #dc2626;
+            transition: all 0.3s ease;
+        }
+        .pdf-download-btn:hover {
+            background-color: #b91c1c;
+            transform: translateY(-1px);
         }
     </style>
+    <!-- Ładowanie jsPDF dla dynamicznego generowania PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.js"></script>
 </head>
 <body>
 
-    <div id="app" class="min-h-screen flex flex-col">
-        <!-- Overlay ładowania -->
-        <div id="loading-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center hidden z-50">
-            <div class="bg-white p-6 rounded-lg shadow-xl flex items-center">
-                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-emerald-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span id="loading-text">Ładowanie...</span>
-            </div>
-        </div>
-
-        <!-- Nagłówek -->
-        <header class="bg-white shadow-md">
-            <nav class="container mx-auto px-4 py-4 flex justify-between items-center">
-                <a href="#" onclick="navigateTo('home')" class="text-2xl font-bold text-emerald-600">Akademia Pisemnictwa</a>
-                <div class="flex items-center space-x-4">
-                    <a href="#" id="dashboard-link" onclick="navigateTo('dashboard')" class="text-gray-700 hover:text-emerald-600 font-medium hidden">Panel Główny</a>
-                    <a href="#" id="files-link" onclick="checkVerificationStatus(true)" class="text-gray-700 hover:text-emerald-600 font-medium hidden">Klub Nauczyciela</a>
-
-                    <span id="user-display" class="hidden text-gray-700 text-sm font-medium"></span>
-                    <button id="auth-button" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out" onclick="handleAuthClick()">
-                        Zaloguj się
-                    </button>
-                </div>
+<div id="app" class="min-h-screen flex flex-col">
+    <!-- Nagłówek -->
+    <header class="bg-white shadow-md p-4 sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-800">
+                <span class="text-indigo-600">Akademia</span> Pisemnictwa
+            </h1>
+            <nav id="nav-container">
+                <!-- Treść nawigacji generowana przez JS -->
             </nav>
-        </header>
+        </div>
+    </header>
 
-        <!-- Główna zawartość -->
-        <main class="flex-grow container mx-auto px-4 py-8">
-            <div id="view-container">
-            </div>
-        </main>
+    <!-- Główna zawartość -->
+    <main class="flex-grow flex items-center justify-center p-4">
+        <div id="content-container" class="w-full max-w-4xl">
+            <!-- Treść główna (widoki) generowana przez JS -->
+            <p class="text-center text-gray-500">Ładowanie aplikacji...</p>
+        </div>
+    </main>
+    
+    <!-- Stopka -->
+    <footer class="bg-gray-800 text-white p-4 text-center mt-8">
+        <p>&copy; 2025 Klub Nauczyciela. Wszystkie prawa zastrzeżone.</p>
+    </footer>
 
-        <!-- Stopka -->
-        <footer class="bg-gray-800 text-white py-4 text-center">
-            <p class="text-sm">&copy; 2024 Akademia Pisemnictwa. Wszelkie prawa zastrzeżone.</p>
-        </footer>
+    <!-- Komunikat (Modal) -->
+    <div id="modal-container" class="hidden fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-xl card max-w-sm w-full mx-4 transform transition-all duration-300 scale-100">
+            <h3 id="modal-title" class="text-xl font-bold mb-4 text-gray-800">Tytuł</h3>
+            <p id="modal-message" class="text-gray-600 mb-6">Wiadomość</p>
+            <button onclick="document.getElementById('modal-container').classList.add('hidden')" class="button-primary text-white font-semibold py-2 px-4 rounded-lg w-full">
+                Rozumiem
+            </button>
+        </div>
     </div>
+</div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        // DODANO: collection, query, addDoc do operacji na materiałach publicznych
-        import { getFirestore, doc, setDoc, onSnapshot, collection, query, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // --- ZMIENNE GLOBALNE ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        
-        const firebaseConfig = {
-            apiKey: "AIzaSyDrp3PAn31CvEeNNjEdRo_5oxpmIeL8T5Q",
-            authDomain: "akademia-pisemnictwa.firebaseapp.com",
-            projectId: "akademia-pisemnictwa",
-            storageBucket: "akademia-pisemnictwa.firebasestorage.app",
-            messagingSenderId: "743127115663",
-            appId: "1:743127115663:web:4e89d5bcc1b00c8eef0dfa",
-            measurementId: "G-4K3TK9XLLR"
-        };
-        
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
-        // Formspree URL dla powiadomienia do ADMINISTRATORA (o nową rejestrację)
-        const FORMSPREE_ADMIN_NOTIFICATION_URL = 'https://formspree.io/f/mkgkwena'; 
+<script type="module">
+    // Importy Firebase
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 
-        // Formspree URL dla wiadomości powitalnej do UŻYTKOWNIKA
-        // UWAGA: Zastąp ten link swoim własnym, dedykowanym do wiadomości powitalnej
-        const FORMSPREE_WELCOME_URL = 'https://formspree.io/f/mknenrno'; 
+    // Ustawienie poziomu logowania na debug
+    setLogLevel('debug');
 
-        let app, db, auth;
-        let userId = null;
-        let isAuthReady = false;
-        let userProfile = null;
-        let currentView = 'home';
-        let selectedClass = 4; // Filtr klasy dla Klubu Nauczyciela
+    // Stałe środowiskowe
+    const FORMSPREE_URL = "https://formspree.io/f/mkgkwena";
+    const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'akademia-pisemnictwa-default';
+    
+    // Konfiguracja Firebase
+    const firebaseConfigString = typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify({
+        apiKey: "AIzaSyDrp3PAn31CvEeNNjEdRo_5oxpmIeL8T5Q",
+        authDomain: "akademia-pisemnictwa.firebaseapp.com",
+        projectId: "akademia-pisemnictwa",
+        storageBucket: "akademia-pisemnictwa.firebasestorage.app",
+        messagingSenderId: "743127115663",
+        appId: "1:743127115663:web:4e89d5bcc1b00c8eef0dfa",
+        measurementId: "G-4K3TK9XLLR"
+    });
+    const firebaseConfig = JSON.parse(firebaseConfigString);
+    
+    // Zmienne globalne dla stanu aplikacji
+    let app, db, auth;
+    let currentView = 'home';
+    let userProfile = null; // Zawiera fullName, isVerified itp.
+    let isAuthReady = false;
+    
+    // Dane materiałów
+    const materialsData = [
+        { id: 1, title: "Jak napisać rozprawkę na 100% - Poradnik Maturalny", description: "Szczegółowy przewodnik po strukturze, argumentacji i języku rozprawki. Idealny do powtórek.", content: "Treść materiału 1. Wstęp, rozwinięcie (argument 1, argument 2, argument 3), podsumowanie. To jest miejsce na szczegółowy tekst, który zostanie umieszczony w PDF." },
+        { id: 2, title: "Schematy kompozycyjne dla każdego typu wypracowania", description: "Zestaw gotowych schematów ułatwiających planowanie esejów, opowiadań i sprawozdań.", content: "Treść materiału 2. Schemat rozprawki, schemat opowiadania, schemat recenzji. Użycie tabel i wypunktowań. To jest drugi przykład treści do PDF." },
+        { id: 3, title: "50 gotowych zwrotów i fraz - Jak wzbogacić język", description: "Lista zaawansowanych konstrukcji językowych do użycia w formalnych tekstach.", content: "Treść materiału 3. Zwroty wprowadzające, zwroty łączące argumenty, zwroty podsumowujące. Zestawienie na liście. To jest trzeci przykład treści do PDF." },
+    ];
 
-        let materialState = {
-            allMaterials: [], // Zastępuje hardkodowaną tablicę 'materials'
-            unsubscribe: null, // Subskrypcja nasłuchiwania materiałów
-            viewMode: 'view' // 'view' (lista) lub 'add' (formularz admina)
-        };
+    // --- Narzędzia UI (bez zmian) ---
 
+    function showModal(title, message) {
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('modal-message').textContent = message;
+        document.getElementById('modal-container').classList.remove('hidden');
+    }
 
-        const viewContainer = document.getElementById('view-container');
-        const authButton = document.getElementById('auth-button');
-        const userDisplay = document.getElementById('user-display');
-        const loadingOverlay = document.getElementById('loading-overlay');
-        const loadingText = document.getElementById('loading-text');
+    function setView(view) {
+        currentView = view;
+        renderApp();
+    }
 
-        // --- FUNKCJE POMOCNICZE FIRESTORE ---
+    // --- Firebase i Autoryzacja (ZMODYFIKOWANE) ---
 
-        const setLoading = (show, text = 'Ładowanie...') => {
-            loadingText.textContent = text;
-            loadingOverlay.classList.toggle('hidden', !show);
-        };
+    function getUserProfileRef(uid) {
+        // Używamy zdefiniowanej ścieżki dla danych prywatnych użytkownika w aplikacji
+        return doc(db, `/artifacts/${APP_ID}/users/${uid}/materials/profile`);
+    }
+    
+    /**
+     * Inicjalizuje Firebase i konfiguruje słuchacza stanu autoryzacji.
+     * UWAGA: NIE PRZEPROWADZA automatycznego logowania/logowania anonimowego.
+     */
+    async function initAuthAndSubscribe() {
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
 
-        const alertMessage = (message, bgColorClass = 'bg-red-600') => {
-            const notification = document.createElement('div');
-            notification.className = `fixed top-4 right-4 ${bgColorClass} text-white p-4 rounded-lg shadow-xl z-[999] opacity-0 transition-opacity duration-300`;
-            notification.textContent = message;
-            document.body.appendChild(notification);
-            setTimeout(() => { notification.classList.add('opacity-100'); }, 10);
-            setTimeout(() => { notification.classList.remove('opacity-100'); }, 4000);
-            setTimeout(() => { notification.remove(); }, 5000);
-        };
-
-        const getUserProfileRef = (uid) => {
-            return doc(db, `artifacts/${appId}/users/${uid}/academy_profiles/data`);
-        }
-        
-        const getMaterialsCollectionRef = () => {
-            return collection(db, `artifacts/${appId}/public/data/materials`);
-        };
-
-        // --- FUNKCJE WYSYŁKI E-MAIL (FORMSPREE) ---
-
-        /**
-         * Wysyła powiadomienie do administratora o nowej rejestracji w celu weryfikacji.
-         * Używa FORMSPREE_ADMIN_NOTIFICATION_URL
-         */
-        const sendFormspreeAdminNotification = async (userData) => {
-            try {
-                const response = await fetch(FORMSPREE_ADMIN_NOTIFICATION_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        'subject': `[AKADEMIA PISARSTWA] Nowy wniosek o weryfikację: ${userData.fullName}`,
-                        'Imię i Nazwisko': userData.fullName,
-                        'Email (do weryfikacji)': userData.email,
-                        'Telefon': userData.phone || 'Brak',
-                        'Status': userData.verificationStatus,
-                        'Komentarz': 'Proszę o sprawdzenie i nadanie roli/statusu w konsoli Firebase.'
-                    })
-                });
-                if (!response.ok) {
-                    console.error('Błąd wysyłki powiadomienia do admina (Formspree).', response.statusText);
-                }
-            } catch (error) {
-                console.error('Błąd połączenia Formspree (admin):', error);
-            }
-        };
-
-        /**
-         * Wysyła e-mail powitalny do nowo zarejestrowanego użytkownika z niestandardowym formatowaniem.
-         * Używa FORMSPREE_WELCOME_URL i pola _replyto jako adresu odbiorcy.
-         */
-        const sendWelcomeEmail = async (userData) => {
-            const firstName = userData.fullName.split(' ')[0];
-            
-            // CAŁA formatowana treść E-MAIL w HTML - TO POLE BĘDZIE WYŚWIETLONE PRZEZ FORMSPREE
-            const htmlMessage = `
-                <div style="font-family: 'Inter', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
-                    
-                    <!-- Nagłówek E-maila -->
-                    <div style="background-color: #059669; color: #ffffff; padding: 20px; text-align: center; border-bottom: 5px solid #10b981;">
-                        <h1 style="margin: 0; font-size: 24px;">Akademia Pisemnictwa</h1>
-                        <p style="margin: 5px 0 0; font-size: 14px;">Klub Plików dla Nauczycieli Polskiego</p>
-                    </div>
-
-                    <!-- Treść Główna -->
-                    <div style="padding: 30px; background-color: #ffffff;">
-                        <h2 style="color: #10b981; font-size: 22px; margin-top: 0;">Witaj, ${firstName}! Dziękujemy za rejestrację!</h2>
-                        
-                        <p>Z radością informujemy, że Twoje konto zostało pomyślnie utworzone. Jesteśmy dumni, że dołączasz do naszej społeczności polonistów!</p>
-
-                        <div style="margin: 20px 0; padding: 15px; border-left: 4px solid #f59e0b; background-color: #fffbeb;">
-                            <p style="margin: 0; color: #78350f; font-weight: 600;">Status Twojego konta: WERYFIKACJA W TRAKCIE.</p>
-                            <p style="margin: 5px 0 0; font-size: 14px; color: #78350f;">Dostęp do Klubu Nauczyciela uzyskasz po weryfikacji, która trwa do 5 dni roboczych.</p>
-                        </div>
-
-                        <p>W każdej chwili możesz sprawdzić status swojego konta, logując się do Panelu Głównego:</p>
-                        
-                        <!-- Przycisk CTA -->
-                        <div style="text-align: center; margin: 30px 0;">
-                            <a href="https://twoj-adres-aplikacji.com/dashboard" 
-                                style="background-color: #10b981; color: #ffffff; padding: 12px 25px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">
-                                Przejdź do Panelu Głównego
-                            </a>
-                        </div>
-                        
-                        <p>Pozdrawiamy serdecznie,</p>
-                        <p style="font-weight: bold; color: #059669;">Zespół Akademii Pisemnictwa</p>
-                    </div>
-
-                    <!-- Stopka E-maila -->
-                    <div style="background-color: #f3f4f6; padding: 20px; text-align: center; font-size: 12px; color: #6b7280;">
-                        <p style="margin: 0;">&copy; 2024 Akademia Pisemnictwa. Wszelkie prawa zastrzeżone.</p>
-                        <p style="margin: 5px 0 0;">Otrzymałeś tę wiadomość, ponieważ zarejestrowałeś się w naszym systemie.</p>
-                    </div>
-                </div>
-            `;
-
-            try {
-                // Wywołanie Formspree
-                const response = await fetch(FORMSPREE_WELCOME_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        // Ten nagłówek mówi Formspree, aby wysłał wiadomość na ten adres
-                        '_replyto': userData.email, 
-                        // To jest tytuł maila
-                        'subject': `Witaj w Akademii Pisemnictwa, ${firstName}!`,
-                        // To jest formatowana treść HTML
-                        'message': htmlMessage, 
-                        'Imię': firstName
-                    })
-                });
-                
-                if (!response.ok) {
-                    console.error('Błąd wysyłki wiadomości powitalnej (Formspree).', response.statusText);
-                }
-            } catch (error) {
-                console.error('Błąd połączenia Formspree (powitalny):', error);
-            }
-        };
-
-
-        // --- NASŁUCHIWANIE I INICJALIZACJA ---
-
-        const listenToMaterials = () => {
-            if (materialState.unsubscribe) {
-                materialState.unsubscribe(); // Czyści starą subskrypcję
-            }
-
-            // Ustawia nasłuchiwanie na publiczną kolekcję materiałów
-            const q = query(getMaterialsCollectionRef());
-            
-            materialState.unsubscribe = onSnapshot(q, (snapshot) => {
-                const materialsList = [];
-                snapshot.forEach((doc) => {
-                    materialsList.push({ id: doc.id, ...doc.data() });
-                });
-                
-                // Sortowanie materiałów po klasie
-                materialsList.sort((a, b) => a.classLevel - b.classLevel); 
-                materialState.allMaterials = materialsList;
-                
-                // Odświeżenie widoku Klubu Nauczyciela, jeśli jest aktywny
-                if (currentView === 'filesClub' && materialState.viewMode === 'view') {
-                    renderFilesClubViewContent();
-                }
-            }, (error) => {
-                console.error("Błąd nasłuchiwania materiałów:", error);
-            });
-        };
-
-        const setupFirebase = async () => {
-            navigateTo('home');
-            try {
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-
-                // Autoryzacja
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                // Nasłuchiwanie stanu autoryzacji
-                onAuthStateChanged(auth, (user) => {
-                    userId = user ? user.uid : null;
-                    isAuthReady = true;
-                    if (user && user.email) {
-                        listenToUserProfile(user.uid);
-                        listenToMaterials(); // Rozpocznij nasłuchiwanie materiałów
-                    } else {
-                        userProfile = null;
-                        updateAuthUI(user);
-                        if (currentView !== 'home') {
-                            navigateTo('home');
-                        }
-                    }
-                });
-
-            } catch (error) {
-                console.error("Błąd inicjalizacji Firebase:", error);
-                setLoading(false);
-                alertMessage(`Błąd inicjalizacji: ${error.message}. Sprawdź konfigurację Firebase.`);
-            }
-        };
-
-        const listenToUserProfile = (uid) => {
-            const profileRef = getUserProfileRef(uid);
-            onSnapshot(profileRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    userProfile = docSnap.data();
-                    checkVerificationStatus(false);
+            // Subskrypcja zmian stanu autoryzacji (teraz to jest jedyny trigger)
+            onAuthStateChanged(auth, (user) => {
+                isAuthReady = true; // Flaga gotowości autoryzacji
+                if (user) {
+                    console.log("Użytkownik zalogowany/autoryzowany:", user.uid);
+                    // Jeśli użytkownik jest zalogowany (po ręcznym loginie/rejestracji), nasłuchuj jego profilu
+                    setupProfileListener(user.uid);
                 } else {
                     userProfile = null;
-                    if (auth.currentUser && !auth.currentUser.isAnonymous) {
-                         navigateTo('home');
-                    } else {
-                        navigateTo('home');
-                    }
+                    console.log("Użytkownik wylogowany.");
+                    // Jeśli użytkownik jest wylogowany, przejdź do widoku 'home'
+                    setView('home'); 
                 }
-                updateAuthUI(auth.currentUser);
-                setLoading(false);
-            }, (error) => {
-                console.error("Błąd nasłuchiwania Firestore:", error);
-                setLoading(false);
+                renderApp();
             });
-        };
 
-        const checkVerificationStatus = (isFilesClubAttempt = false) => {
-            if (!auth.currentUser || !userProfile) {
-                navigateTo('home');
-                return;
-            }
+        } catch (error) {
+            console.error("Błąd inicjalizacji Firebase:", error);
+            showModal("Błąd Krytyczny", "Nie udało się połączyć z usługami aplikacji. Spróbuj później.");
+        }
+    }
+    
+    /**
+     * Ustawia słuchacza na profil użytkownika w Firestore.
+     * @param {string} uid User ID.
+     */
+    function setupProfileListener(uid) {
+        if (!db) return;
 
-            const status = userProfile?.verificationStatus;
-
-            if (status === 'verified') {
-                navigateTo('filesClub');
-            } else if (status === 'pending' || status === 'false' || !userProfile) { 
-                if (isFilesClubAttempt) {
-                    alertMessage("Dostęp do Klubu Nauczyciela wymaga pomyślnej weryfikacji konta. Sprawdź status w Panelu Głównym.");
+        const profileRef = getUserProfileRef(uid);
+        onSnapshot(profileRef, (docSnap) => {
+            if (docSnap.exists()) {
+                userProfile = docSnap.data();
+                console.log("Profil użytkownika zaktualizowany:", userProfile);
+                if (userProfile.isVerified) {
+                    // Jeśli zweryfikowany, przejdź do Klubu
+                    setView('club');
+                } else if (currentView !== 'register') {
+                    // Jeśli niezweryfikowany, pokaż status weryfikacji
+                    setView('verification');
                 }
-                navigateTo('dashboard');
             } else {
-                navigateTo('home');
+                // To się zdarza po udanej rejestracji, ale przed zapisem profilu.
+                userProfile = { fullName: 'Użytkownik', isVerified: false };
+                console.warn("Profil Firestore nie istnieje. Oczekuję na dane rejestracyjne.");
+                // Po rejestracji kod handleRegister przełącza na 'verification'
             }
-        };
+            renderApp();
+        }, (error) => {
+            console.error("Błąd słuchacza Firestore:", error);
+            showModal("Błąd Danych", "Nie udało się pobrać danych profilu. Spróbuj ponownie.");
+        });
+    }
 
-        const updateAuthUI = (user) => {
-            const dashboardLink = document.getElementById('dashboard-link');
-            const filesLink = document.getElementById('files-link');
+    /**
+     * Obsługuje logowanie użytkownika.
+     */
+    async function handleLogin(event) {
+        event.preventDefault();
+        const form = event.target;
+        const email = form.email.value;
+        const password = form.password.value;
 
-            if (user && userProfile) {
-                authButton.textContent = 'Wyloguj';
-                authButton.onclick = signOutUser;
-                userDisplay.textContent = `Witaj, ${userProfile.fullName.split(' ')[0]}!`;
-                userDisplay.classList.remove('hidden');
-                
-                dashboardLink.classList.remove('hidden');
-                filesLink.classList.remove('hidden');
-            } else {
-                authButton.textContent = 'Zaloguj się';
-                authButton.onclick = () => navigateTo('auth');
-                userDisplay.classList.add('hidden');
-                userDisplay.textContent = '';
-                
-                if (dashboardLink) dashboardLink.classList.add('hidden');
-                if (filesLink) filesLink.classList.add('hidden');
-            }
-        };
+        try {
+            // Po zalogowaniu, onAuthStateChanged przejmie kontrolę
+            await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+            console.error("Błąd logowania:", error);
+            showModal("Błąd Logowania", "Nieprawidłowy e-mail lub hasło. Spróbuj ponownie. (Kod: " + error.code + ")");
+        }
+    }
+    
+    /**
+     * Obsługuje rejestrację nowego użytkownika.
+     */
+    async function handleRegister(event) {
+        event.preventDefault();
+        const form = event.target;
+        const fullName = form.fullName.value;
+        const email = form.email.value;
+        const phone = form.phone.value || 'Brak';
+        const password = form.password.value;
+        const passwordConfirm = form.passwordConfirm.value;
 
-        const handleAuthClick = () => {
-            if (auth.currentUser && userProfile) {
-                signOutUser();
-            } else {
-                navigateTo('auth');
-            }
-        };
+        if (password.length < 6) {
+            showModal("Błąd Walidacji", "Hasło musi mieć co najmniej 6 znaków.");
+            return;
+        }
+        if (password !== passwordConfirm) {
+            showModal("Błąd Walidacji", "Hasła nie są identyczne.");
+            return;
+        }
 
-        // --- OBSŁUGA FORMULARZY ---
-        
-        const handleAuthFormSubmit = (event) => {
-            event.preventDefault();
-            const form = event.target;
-            const isRegister = form.querySelector('#fullName') !== null;
-            
-            if (isRegister) {
-                const fullName = form.querySelector('#fullName').value.trim();
-                const email = form.querySelector('#email').value.trim();
-                const phone = form.querySelector('#phone').value.trim();
-                const password = form.querySelector('#password').value;
-                const confirmPassword = form.querySelector('#confirmPassword').value;
+        try {
+            // 1. Utwórz konto w Firebase Authentication
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
 
-                if (password !== confirmPassword) {
-                    alertMessage('Hasła nie są identyczne!');
-                    return;
-                }
-                registerUser(fullName, email, phone, password);
-            } else {
-                const email = form.querySelector('#loginEmail').value.trim();
-                const password = form.querySelector('#loginPassword').value;
-                signInUser(email, password);
-            }
-        };
-
-        const registerUser = async (fullName, email, phone, password) => {
-            setLoading(true, 'Rejestrowanie użytkownika...');
-            try {
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                const uid = userCredential.user.uid;
-                
-                const userData = {
-                    fullName: fullName,
-                    email: email,
-                    phone: phone,
-                    verificationStatus: 'pending', 
-                    role: 'USER', // Domyślna rola
-                };
-                
-                // 1. Zapis profilu w Firestore
-                await setDoc(getUserProfileRef(uid), userData);
-
-                // 2. Wysyłanie maila/powiadomienia o nowym użytkowniku do administratora
-                await sendFormspreeAdminNotification(userData); 
-
-                // 3. Wysyłanie maila powitalnego do użytkownika
-                await sendWelcomeEmail(userData); 
-
-                alertMessage('Rejestracja udana! Sprawdź skrzynkę odbiorczą.', 'bg-emerald-600');
-                navigateTo('verificationStatusCheck');
-            } catch (error) {
-                console.error("Błąd rejestracji:", error);
-                alertMessage(`Błąd rejestracji: ${error.message}`);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        const signInUser = async (email, password) => {
-            setLoading(true, 'Logowanie...');
-            try {
-                await signInWithEmailAndPassword(auth, email, password);
-                alertMessage('Zalogowano pomyślnie!', 'bg-emerald-600');
-                // navigateTo() jest obsługiwane przez onAuthStateChanged/listenToUserProfile
-            } catch (error) {
-                console.error("Błąd logowania:", error);
-                alertMessage(`Błąd logowania: ${error.message}`);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        const signOutUser = async () => {
-            setLoading(true, 'Wylogowywanie...');
-            try {
-                await signOut(auth);
-                userProfile = null;
-                alertMessage('Wylogowano pomyślnie.', 'bg-emerald-600');
-                navigateTo('home');
-            } catch (error) {
-                console.error("Błąd wylogowania:", error);
-                alertMessage(`Błąd wylogowania: ${error.message}`);
-            } finally {
-                setLoading(false);
-            }
-        };
-        
-        const handleAddMaterialSubmit = async (event) => {
-            event.preventDefault();
-            setLoading(true, 'Zapisywanie materiału...');
-
-            const form = event.target;
-            const newMaterial = {
-                title: form.querySelector('#materialTitle').value.trim(),
-                description: form.querySelector('#materialDescription').value.trim(),
-                classLevel: parseInt(form.querySelector('#materialClassLevel').value, 10),
-                type: form.querySelector('#materialType').value.trim(),
-                size: form.querySelector('#materialSize').value.trim(),
-                url: form.querySelector('#materialUrl').value.trim(),
-                createdAt: new Date().toISOString(),
-                author: userProfile?.fullName || 'Admin',
+            // 2. Zapisz profil w Firestore z flagą UNVERIFIED
+            const profileData = {
+                fullName,
+                email,
+                phone,
+                isVerified: false, // KLUCZOWE: Użytkownik czeka na weryfikację
+                registeredAt: new Date().toISOString(),
             };
+            await setDoc(getUserProfileRef(user.uid), profileData);
 
-            try {
-                await addDoc(getMaterialsCollectionRef(), newMaterial);
-                alertMessage('Materiał dodany pomyślnie!', 'bg-emerald-600');
-                materialState.viewMode = 'view';
-                navigateTo('filesClub');
-            } catch (error) {
-                console.error("Błąd dodawania materiału:", error);
-                alertMessage(`Błąd zapisu: ${error.message}`);
-            } finally {
-                setLoading(false);
+            // 3. Wyślij powiadomienie do Formspree
+            const formspreeData = new FormData();
+            formspreeData.append('Imię i Nazwisko', fullName);
+            formspreeData.append('E-mail', email);
+            formspreeData.append('Numer Telefonu', phone);
+            formspreeData.append('Status', 'WERYFIKACJA');
+            formspreeData.append('ID użytkownika (UID)', user.uid);
+
+            const formspreeResponse = await fetch(FORMSPREE_URL, {
+                method: 'POST',
+                body: formspreeData,
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if (!formspreeResponse.ok) {
+                console.warn("Wysyłka do Formspree się nie powiodła, ale konto zostało utworzone.");
             }
-        };
 
+            // 4. Przejście do widoku oczekiwania
+            setView('verification');
+            showModal("Rejestracja Udana", "Twoje konto zostało utworzone! Trwa proces weryfikacji. Otrzymasz maila po pozytywnej decyzji.");
 
-        // --- WIDOKI ---
+        } catch (error) {
+            console.error("Błąd rejestracji:", error);
+            let errorMessage = "Wystąpił nieoczekiwany błąd podczas rejestracji.";
+            if (error.code === 'auth/email-already-in-use') {
+                errorMessage = "Ten adres e-mail jest już zajęty. Zaloguj się lub użyj innego adresu.";
+            } else if (error.code === 'auth/invalid-email') {
+                 errorMessage = "Podany adres e-mail jest nieprawidłowy.";
+            }
+            showModal("Błąd Rejestracji", errorMessage);
+        }
+    }
+    
+    /**
+     * Wylogowuje użytkownika.
+     */
+    async function handleLogout() {
+        try {
+            await signOut(auth);
+            userProfile = null;
+            setView('home');
+            showModal("Wylogowanie", "Pomyślnie wylogowano z Klubu Nauczyciela.");
+        } catch (error) {
+            console.error("Błąd wylogowania:", error);
+        }
+    }
 
-        window.navigateTo = (view) => {
-            currentView = view;
-            render();
-            window.scrollTo(0, 0);
-        };
+    // --- Generowanie PDF (bez zmian) ---
+
+    /**
+     * Generuje plik PDF z wybranym materiałem i dynamiczną stopką.
+     * @param {object} material Dane materiału.
+     */
+    async function generatePDF(material) {
+        if (!userProfile || !userProfile.fullName) {
+            showModal("Błąd", "Brak danych użytkownika. Zaloguj się ponownie.");
+            return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        if (!jsPDF) {
+            showModal("Błąd", "Brak biblioteki jsPDF. Spróbuj odświeżyć stronę.");
+            return;
+        }
+
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const margin = 20;
         
-        window.setFilterClass = (classLevel) => {
-            selectedClass = classLevel;
-            renderFilesClubViewContent();
+        // Ustawienie czcionki dla polskiego
+        // Zakładamy, że czcionka 'Inter' załadowana w stylach jest dostępna
+        doc.setFont('Inter', 'normal');
+        
+        // Data i stopka
+        const date = new Date();
+        const formattedDate = date.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const formattedTime = date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+        const footerText = `Pobrano przez: ${userProfile.fullName}, dnia: ${formattedDate} ${formattedTime}`;
+        
+        // --- Funkcja Stopki ---
+        const pageCount = 1; // Generujemy na 1 stronę, aby uprościć jsPDF
+        for(let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            
+            // Stopka lewa (strona i punkty - z obrazka użytkownika)
+            doc.setFontSize(8);
+            doc.text(`....... / ${material.id} p.`, margin, doc.internal.pageSize.height - 10);
+            
+            // Stopka prawa (dane pobierającego)
+            doc.setFontSize(8);
+            const footerWidth = doc.getStringUnitWidth(footerText) * 8 / doc.internal.scaleFactor; // Długość tekstu
+            doc.text(footerText, doc.internal.pageSize.width - margin, doc.internal.pageSize.height - 10, { align: 'right' });
+            
+            // POLECENIE nagłówek (replika z obrazka)
+            doc.setFontSize(10);
+            doc.setFont('Inter', 'bold');
+            doc.text("POLECENIE:", margin, 15);
+            doc.setFont('Inter', 'normal');
+            doc.text(`Napisz artykuł na temat ${material.title}. Zredaguj tytuł, lid, śródtytuły.`, margin + 25, 15);
+            doc.setFontSize(8);
+            doc.text("Wykorzystaj fragment raportu opracowany przez Bibliotekę Narodową.", margin + 25, 20);
+
+            // Kolumny Wypełnia Egzaminator
+            doc.text("Wypełnia", margin, 35);
+            doc.text("Egzaminator", margin, 38);
+            doc.text("Wypełnia", doc.internal.pageSize.width - margin, 35, { align: 'right' });
+            doc.text("Egzaminator", doc.internal.pageSize.width - margin, 38, { align: 'right' });
+            
+            // Linie do pisania (jak w szablonie)
+            doc.setLineWidth(0.1);
+            for(let lineY = 45; lineY < doc.internal.pageSize.height - 20; lineY += 7) {
+                 doc.line(margin, lineY, doc.internal.pageSize.width - margin, lineY);
+            }
         }
         
-        window.toggleAdminView = (mode) => {
-            materialState.viewMode = mode;
-            navigateTo('filesClub'); // Wymuś ponowne renderowanie
-        };
+        // Zapis pliku
+        doc.save(`${material.title.replace(/ /g, '_')}_pobrano_${formattedDate}.pdf`);
+    }
 
-        window.switchAuthMode = (isRegister) => {
-            viewContainer.innerHTML = renderAuthView(isRegister);
-            document.getElementById('auth-form').addEventListener('submit', handleAuthFormSubmit);
-        };
+    // --- Funkcje Renderowania Widoków (bez zmian) ---
 
-        const renderHomeView = () => `
-            <div class="hero-bg text-white p-12 md:p-20 rounded-xl shadow-2xl text-center">
-                <h1 class="text-4xl md:text-6xl font-extrabold mb-4">Akademia Pisemnictwa</h1>
-                <p class="text-xl md:text-2xl mb-8 font-light">Twoje źródło profesjonalnych materiałów do nauki pisania wypracowań.</p>
-                
-                <p class="text-lg mb-10 font-medium text-emerald-100 max-w-2xl mx-auto">
-                    Akademia Pisemnictwa to platforma stworzona z myślą o <b>nauczycielach języka polskiego</b>. Dostarczamy gotowe, sprawdzone materiały dydaktyczne, w tym <b>checklisty i szablony</b>, które ułatwiają weryfikację wiedzy i umiejętności pisarskich uczniów.
+    function renderNav() {
+        const navContainer = document.getElementById('nav-container');
+        let navHtml = '';
+        
+        if (auth.currentUser && userProfile && userProfile.isVerified) {
+            navHtml = `
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm font-medium text-gray-600 hidden sm:inline">Witaj, ${userProfile.fullName}!</span>
+                    <button onclick="handleLogout()" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                        Wyloguj (${userProfile.fullName.split(' ')[0]})
+                    </button>
+                </div>
+            `;
+        } else {
+            navHtml = `
+                <button onclick="setView('login')" class="button-primary text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                    Zaloguj się
+                </button>
+            `;
+        }
+        
+        navContainer.innerHTML = navHtml;
+    }
+
+    function renderHome() {
+        return `
+            <div class="text-center p-8 bg-white rounded-xl card max-w-2xl mx-auto">
+                <h2 class="text-4xl font-extrabold text-indigo-700 mb-4">
+                    Klub Plików Nauczyciela
+                </h2>
+                <p class="text-xl text-gray-600 mb-8">
+                    Ekskluzywne materiały dydaktyczne dla polonistów i nauczycieli.
+                </p>
+                <p class="text-gray-700 mb-6">
+                    Zaloguj się, aby uzyskać dostęp do gotowych konspektów, schematów wypracowań i zestawów ćwiczeń.
+                </p>
+                <button onclick="setView('login')" class="button-primary text-white font-bold text-lg py-3 px-8 rounded-xl shadow-lg hover:shadow-xl transition duration-300 transform hover:scale-105">
+                    Rozpocznij (Zaloguj się)
+                </button>
+            </div>
+        `;
+    }
+
+    function renderLogin() {
+        return `
+            <div class="bg-white p-8 rounded-xl card max-w-md mx-auto">
+                <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">Logowanie do Klubu</h2>
+                <form onsubmit="handleLogin(event)">
+                    <div class="mb-4">
+                        <label for="login-email" class="block text-sm font-medium text-gray-700">Adres E-mail</label>
+                        <input type="email" id="login-email" name="email" required 
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div class="mb-6">
+                        <label for="login-password" class="block text-sm font-medium text-gray-700">Hasło</label>
+                        <input type="password" id="login-password" name="password" required 
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    
+                    <button type="submit" class="button-primary text-white font-semibold py-2.5 px-4 rounded-lg w-full mb-4 shadow-md">
+                        Zaloguj się
+                    </button>
+                </form>
+                <div class="text-center text-sm text-gray-600">
+                    Nie masz konta? 
+                    <a href="#" onclick="setView('register')" class="text-indigo-600 hover:text-indigo-800 font-medium transition duration-200">Zarejestruj się</a>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderRegister() {
+        return `
+            <div class="bg-white p-8 rounded-xl card max-w-lg mx-auto">
+                <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">Rejestracja w Klubie</h2>
+                <form onsubmit="handleRegister(event)">
+                    <div class="mb-4">
+                        <label for="reg-fullName" class="block text-sm font-medium text-gray-700">Imię i nazwisko</label>
+                        <input type="text" id="reg-fullName" name="fullName" required 
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div class="mb-4">
+                        <label for="reg-email" class="block text-sm font-medium text-gray-700">Adres E-mail</label>
+                        <input type="email" id="reg-email" name="email" required 
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div class="mb-4">
+                        <label for="reg-phone" class="block text-sm font-medium text-gray-700">Numer telefonu (opcjonalnie)</label>
+                        <input type="tel" id="reg-phone" name="phone"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label for="reg-password" class="block text-sm font-medium text-gray-700">Hasło</label>
+                            <input type="password" id="reg-password" name="password" required 
+                                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label for="reg-passwordConfirm" class="block text-sm font-medium text-gray-700">Powtórz hasło</label>
+                            <input type="password" id="reg-passwordConfirm" name="passwordConfirm" required 
+                                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="button-primary text-white font-semibold py-2.5 px-4 rounded-lg w-full mb-4 shadow-md">
+                        Zarejestruj się i Wyślij do Weryfikacji
+                    </button>
+                </form>
+                <div class="text-center text-sm text-gray-600">
+                    Masz już konto? 
+                    <a href="#" onclick="setView('login')" class="text-indigo-600 hover:text-indigo-800 font-medium transition duration-200">Zaloguj się</a>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderVerification() {
+        const email = auth.currentUser?.email || userProfile?.email || 'Twój adres e-mail';
+        return `
+            <div class="text-center p-8 bg-yellow-50 border-4 border-yellow-300 rounded-xl card max-w-xl mx-auto">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-yellow-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h2 class="text-3xl font-bold text-yellow-700 mb-4">
+                    Trwa weryfikacja konta
+                </h2>
+                <p class="text-lg text-gray-700 mb-6">
+                    Dziękujemy za rejestrację (${email}).
+                </p>
+                <p class="text-gray-600 font-medium mb-8">
+                    Weryfikacja trwa do 5 dni roboczych. O pozytywnej weryfikacji otrzymasz powiadomienie mailowe. Dziękujemy za cierpliwość.
+                </p>
+                <button onclick="handleLogout()" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                    Wyloguj i Spróbuj Później
+                </button>
+                <p class="text-xs mt-4 text-gray-400">Twój identyfikator: ${auth.currentUser?.uid || 'Ładowanie...'}</p>
+            </div>
+        `;
+    }
+
+    function renderClub() {
+        if (!userProfile || !userProfile.isVerified) {
+            setView('verification');
+            return '';
+        }
+
+        const materialsList = materialsData.map(material => `
+            <div class="bg-white p-6 rounded-xl card flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 hover:border-indigo-400 border-2 border-transparent">
+                <div class="flex-grow">
+                    <h3 class="text-xl font-semibold text-gray-900 mb-1">${material.title}</h3>
+                    <p class="text-gray-600 text-sm">${material.description}</p>
+                </div>
+                <button onclick="generatePDF(${material.id})" 
+                        class="pdf-download-btn text-white font-semibold py-2 px-6 rounded-lg shadow-lg hover:shadow-xl transition duration-300 flex items-center space-x-2 w-full md:w-auto">
+                    <!-- Ikona SVG pliku -->
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0012 2.414L16.586 7A2 2 0 0117 8.414V16a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2zm5 2.5a1 1 0 00-2 0V9H5v2h2v3h2v-3h2V9H9V6.5z" clip-rule="evenodd" />
+                    </svg>
+                    <span>Pobierz PDF</span>
+                </button>
+            </div>
+        `).join('');
+
+
+        return `
+            <div class="max-w-4xl mx-auto">
+                <h2 class="text-4xl font-extrabold text-gray-800 mb-2">Witaj, ${userProfile.fullName}!</h2>
+                <h3 class="text-2xl font-bold text-indigo-600 mb-8">Klub Plików Nauczyciela</h3>
+                <p class="text-gray-600 mb-8 p-4 bg-indigo-50 border-l-4 border-indigo-400 rounded-lg">
+                    Gratulacje! Twoje konto zostało zweryfikowane. Poniżej znajdziesz wszystkie ekskluzywne materiały do pobrania. Każdy pobrany plik PDF będzie automatycznie opatrzony Twoim imieniem i nazwiskiem oraz datą pobrania.
                 </p>
 
-                <button onclick="navigateTo('auth')" class="bg-white text-emerald-600 font-bold py-3 px-8 rounded-full text-lg uppercase tracking-wider btn-primary">
-                    Dołącz do Klubu Plików
-                </button>
-            </div>
-
-            <div class="grid md:grid-cols-3 gap-8 mt-12">
-                <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-emerald-500">
-                    <h3 class="text-xl font-semibold mb-3 text-gray-800">Baza Wypracowań</h3>
-                    <p class="text-gray-600">Gotowe szablony i analizy lektur, dostosowane do wymagań egzaminacyjnych.</p>
-                </div>
-                <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-emerald-500">
-                    <h3 class="text-xl font-semibold mb-3 text-gray-800">Checklisty Oceniania</h3>
-                    <p class="text-gray-600">Dokładne listy kontrolne dla nauczycieli i uczniów, ułatwiające sprawdzanie prac.</p>
-                </div>
-                <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-emerald-500">
-                    <h3 class="text-xl font-semibold mb-3 text-gray-800">Webinary i Kursy</h3>
-                    <p class="text-gray-600">Dostęp do archiwalnych nagrań z warsztatów dla polonistów.</p>
+                <div class="space-y-4">
+                    ${materialsList}
                 </div>
             </div>
         `;
-
-        const renderAuthView = (isRegister = false) => `
-            <div id="auth-card" class="max-w-md mx-auto bg-white p-8 rounded-xl shadow-2xl">
-                <h2 class="text-3xl font-bold mb-6 text-center text-gray-800">${isRegister ? 'Zarejestruj się' : 'Zaloguj się'}</h2>
-                <form id="auth-form">
-                    ${isRegister ? `
-                        <input type="text" id="fullName" placeholder="Imię i nazwisko" required class="input-field w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"/>
-                        <input type="email" id="email" placeholder="E-mail" required class="input-field w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"/>
-                        <input type="tel" id="phone" placeholder="Numer telefonu (opcjonalnie)" class="input-field w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"/>
-                        <input type="password" id="password" placeholder="Hasło" required class="input-field w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"/>
-                        <input type="password" id="confirmPassword" placeholder="Powtórz hasło" required class="input-field w-full p-3 mb-6 border border-gray-300 rounded-lg focus:outline-none"/>
-                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg btn-primary shadow-md">
-                            Zarejestruj i Poproś o Weryfikację
-                        </button>
-                    ` : `
-                        <input type="email" id="loginEmail" placeholder="E-mail" required class="input-field w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"/>
-                        <input type="password" id="loginPassword" placeholder="Hasło" required class="input-field w-full p-3 mb-6 border border-gray-300 rounded-lg focus:outline-none"/>
-                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg btn-primary shadow-md">
-                            Zaloguj się
-                        </button>
-                    `}
-                </form>
-                <div class="mt-6 text-center">
-                    ${isRegister ? `
-                        <p class="text-sm text-gray-600">Masz już konto? <a href="#" onclick="switchAuthMode(false)" class="text-emerald-600 hover:text-emerald-700 font-semibold">Zaloguj się</a></p>
-                    ` : `
-                        <p class="text-sm text-gray-600">Nie masz konta? <a href="#" onclick="switchAuthMode(true)" class="text-emerald-600 hover:text-emerald-700 font-semibold">Zarejestruj się</a></p>
-                    `}
-                </div>
-            </div>
-        `;
-
-        const renderDashboardView = () => {
-            const userName = userProfile ? userProfile.fullName.split(' ')[0] : 'Użytkowniku';
-            const status = userProfile?.verificationStatus;
-            
-            let statusMessageHtml;
-            let statusClass = "border-emerald-600";
-
-            if (status === 'verified') {
-                statusMessageHtml = `
-                    <p class="text-lg text-gray-600 mb-8">Jak Ci mija dzisiejszy dzień? Twoje konto jest <b>ZWERYFIKOWANE</b>. Pełen dostęp do Klubu Nauczyciela czeka!</p>
-                    <button onclick="navigateTo('filesClub')" class="mt-6 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-6 rounded-lg btn-primary shadow-md">
-                        Przejdź do Klubu Nauczyciela
-                    </button>
-                `;
-            } else if (status === 'false') {
-                statusClass = "border-red-600";
-                statusMessageHtml = `
-                    <h3 class="text-2xl font-bold mb-4 text-red-600">Twoje konto nie zostało zweryfikowane</h3>
-                    <p class="text-gray-700 font-medium mb-4">Skontaktuj się z nami w celu wyjaśnienia statusu.</p>
-                    <div class="text-left bg-red-50 p-6 rounded-lg border border-red-200">
-                        <p class="font-semibold text-gray-800 mt-4 mb-2">Skontaktuj się z nami:</p>
-                        <ul class="list-disc list-inside space-y-1 text-sm text-gray-600">
-                            <li><span class="font-medium text-red-600">Sprawy weryfikacji konta:</span> <a href="mailto:weryfikacja.osc4r@hub.pl" class="text-blue-600 hover:underline">weryfikacja.osc4r@hub.pl</a></li>
-                            <li><span class="font-medium text-red-600">Inne zapytania:</span> <a href="mailto:centrumobslugiklienta@osc4r.hub.pl" class="text-blue-600 hover:underline">centrumobslugiklienta@osc4r.hub.pl</a></li>
-                        </ul>
-                        <p class="mt-4 text-sm text-gray-500">Odpowiemy w ciągu 5 dni roboczych.</p>
-                    </div>
-                `;
-            } else { 
-                statusClass = "border-yellow-500";
-                statusMessageHtml = `
-                    <h3 class="text-2xl font-bold mb-4 text-yellow-600">Twoje konto jest w trakcie weryfikacji</h3>
-                    <p class="text-lg text-gray-600 mb-8">Jak Ci mija dzisiejszy dzień? Czekamy na potwierdzenie Twoich danych.</p>
-                    <p class="text-gray-500">Dostęp do Klubu Nauczyciela uzyskasz po zakończeniu weryfikacji (do 5 dni roboczych).</p>
-                `;
-            }
-
-            return `
-                <div class="bg-white p-8 rounded-xl shadow-2xl border-t-4 ${statusClass} text-center">
-                    <h2 class="text-4xl font-bold mb-4 text-gray-800">Witaj, ${userName}!</h2>
-                    ${statusMessageHtml}
-                </div>
-            `;
-        };
-
-        const renderVerificationStatusView = () => {
-            const userName = userProfile ? userProfile.fullName.split(' ')[0] : 'Użytkowniku';
-            
-            return `
-                <div class="max-w-xl mx-auto bg-white p-10 rounded-xl shadow-2xl border-l-4 border-yellow-500 text-center">
-                    <svg class="w-16 h-16 text-yellow-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                    <h2 class="text-3xl font-bold mb-4 text-gray-800">Wniosek Wysłany</h2>
-                    <p class="text-gray-600 mb-6 text-lg">Witaj, <b>${userName}</b>!</p>
-                    
-                    <div class="text-left bg-yellow-50 p-6 rounded-lg border border-yellow-200">
-                        <p class="text-gray-700 mb-4">Twój wniosek o weryfikację konta został przyjęty. Proces ten potrwa do <b>5 dni roboczych</b>.</p>
-                        <p class="text-gray-700 font-medium"><b>Sprawdź też swoją skrzynkę mailową</b> — wysłaliśmy Ci wiadomość powitalną. Dostęp do Klubu Nauczyciela uzyskasz po zakończeniu weryfikacji. Wróć do <a href="#" onclick="navigateTo('dashboard')" class="text-emerald-600 hover:underline font-semibold">Panelu Głównego</a>, aby sprawdzić status.</p>
-                    </div>
-
-                    <button onclick="signOutUser()" class="mt-8 text-sm text-red-500 hover:text-red-700 transition">Wyloguj</button>
-                </div>
-            `;
-        };
+    }
+    
+    /**
+     * Główna funkcja renderująca.
+     */
+    function renderApp() {
+        const container = document.getElementById('content-container');
+        renderNav();
         
-        const renderFilesClubViewContent = () => {
-            // Użycie dynamicznie ładowanych materiałów z Firestore
-            const filteredMaterials = materialState.allMaterials.filter(m => m.classLevel === selectedClass);
-            
-            const classButtons = [4, 5, 6, 7, 8].map(cls => `
-                <button 
-                    onclick="setFilterClass(${cls})" 
-                    class="py-2 px-4 rounded-full font-semibold transition duration-150 ease-in-out ${selectedClass === cls ? 'bg-emerald-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-emerald-100'}"
-                >
-                    Klasa ${cls}
-                </button>
-            `).join('');
+        if (!isAuthReady) {
+            container.innerHTML = `<div class="text-center p-8"><p class="text-xl text-indigo-600 animate-pulse">Inicjalizacja systemu...</p></div>`;
+            return;
+        }
 
-            const materialsHtml = filteredMaterials.length > 0 ? filteredMaterials.map(m => `
-                <div class="bg-gray-50 p-5 rounded-lg border border-gray-200 hover:shadow-lg transition duration-150">
-                    <h3 class="text-2xl font-semibold mb-2 text-gray-800">${m.title}</h3>
-                    <p class="text-gray-600 mb-3">${m.description}</p>
-                    <div class="flex justify-between items-center text-sm text-gray-500">
-                        <span>Typ: <b>${m.type}</b></span>
-                        <span>Rozmiar: <b>${m.size}</b></span>
-                    </div>
-                    <a href="${m.url}" target="_blank" rel="noopener noreferrer" class="mt-3 inline-block text-emerald-600 font-medium hover:underline">Pobierz Materiał</a>
-                </div>
-            `).join('') : `<p class="col-span-full text-center text-gray-500 py-10">Brak materiałów dla wybranej klasy. Pracujemy nad ich dodaniem!</p>`;
-
-            const classFiltersElement = document.getElementById('class-filters');
-            if (classFiltersElement) {
-                classFiltersElement.innerHTML = classButtons;
+        if (auth.currentUser && userProfile) {
+            // Użytkownik zalogowany i mamy dane profilu
+            if (userProfile.isVerified) {
+                container.innerHTML = renderClub();
+            } else {
+                 // Użytkownik zalogowany, ale nie zweryfikowany
+                 container.innerHTML = renderVerification();
             }
-            const materialsListElement = document.getElementById('materials-list');
-            if (materialsListElement) {
-                materialsListElement.innerHTML = materialsHtml;
-            }
-        };
-
-        const renderAddMaterialForm = () => {
-            return `
-                <div class="max-w-xl mx-auto bg-gray-50 p-8 rounded-xl shadow-lg border-t-4 border-indigo-600">
-                    <div class="flex justify-between items-start mb-6">
-                        <h3 class="text-3xl font-bold text-indigo-700">Dodaj Nowy Materiał (ADMIN)</h3>
-                        <button onclick="toggleAdminView('view')" class="text-sm text-gray-500 hover:text-gray-700 flex items-center">
-                             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Wróć do listy
-                        </button>
-                    </div>
-                    <p class="text-gray-600 mb-6">Wprowadź szczegóły nowego pliku, który będzie dostępny dla zweryfikowanych nauczycieli. Upewnij się, że URL jest poprawny.</p>
-                    
-                    <form id="add-material-form">
-                        <div class="mb-4">
-                            <label for="materialTitle" class="block text-sm font-medium text-gray-700 mb-1">Tytuł Materiału</label>
-                            <input type="text" id="materialTitle" required class="input-field w-full p-3 border border-gray-300 rounded-lg focus:outline-none"/>
-                        </div>
-                        <div class="mb-4">
-                            <label for="materialDescription" class="block text-sm font-medium text-gray-700 mb-1">Opis</label>
-                            <textarea id="materialDescription" required rows="3" class="input-field w-full p-3 border border-gray-300 rounded-lg focus:outline-none"></textarea>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4 mb-6">
-                            <div>
-                                <label for="materialClassLevel" class="block text-sm font-medium text-gray-700 mb-1">Klasa</label>
-                                <select id="materialClassLevel" required class="input-field w-full p-3 border border-gray-300 rounded-lg focus:outline-none">
-                                    <option value="4">Klasa 4</option>
-                                    <option value="5">Klasa 5</option>
-                                    <option value="6">Klasa 6</option>
-                                    <option value="7">Klasa 7</option>
-                                    <option value="8">Klasa 8</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="materialType" class="block text-sm font-medium text-gray-700 mb-1">Typ Pliku</label>
-                                <select id="materialType" required class="input-field w-full p-3 border border-gray-300 rounded-lg focus:outline-none">
-                                    <option value="PDF">PDF</option>
-                                    <option value="DOCX">DOCX</option>
-                                    <option value="Arkusz Google">Arkusz Google</option>
-                                    <option value="Wideo">Wideo</option>
-                                    <option value="Inny">Inny</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4 mb-6">
-                            <div>
-                                <label for="materialSize" class="block text-sm font-medium text-gray-700 mb-1">Rozmiar (np. '1.5 MB', 'Online')</label>
-                                <input type="text" id="materialSize" required class="input-field w-full p-3 border border-gray-300 rounded-lg focus:outline-none"/>
-                            </div>
-                            <div>
-                                <label for="materialUrl" class="block text-sm font-medium text-gray-700 mb-1">Link do Pliku (URL)</label>
-                                <input type="url" id="materialUrl" required class="input-field w-full p-3 border border-gray-300 rounded-lg focus:outline-none"/>
-                            </div>
-                        </div>
-
-                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg btn-primary shadow-md">
-                            Zapisz Materiał w Bazie Firestore
-                        </button>
-                    </form>
-                </div>
-            `;
-        };
-
-        const renderFilesClubView = () => {
-            if (!userProfile || userProfile.verificationStatus !== 'verified') {
-                checkVerificationStatus(true);
-                return '';
-            }
-            
-            const isAdmin = userProfile.role === 'ADMIN';
-
-            if (materialState.viewMode === 'add' && isAdmin) {
-                return renderAddMaterialForm();
-            }
-            
-            // Widok listy materiałów
-            return `
-                <div class="bg-white p-8 rounded-xl shadow-2xl border-t-4 border-emerald-600">
-                    <div class="flex justify-between items-start mb-6">
-                        <h2 class="text-4xl font-bold text-emerald-700">🏆 Klub Nauczyciela - Materiały Dydaktyczne</h2>
-                        ${isAdmin ? `
-                            <button onclick="toggleAdminView('add')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center whitespace-nowrap">
-                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                Dodaj Materiał
-                            </button>
-                        ` : ''}
-                    </div>
-                    <p class="text-lg text-gray-700 mb-8">Poniżej znajdziesz materiały pogrupowane według klas 4-8. Wybierz klasę, aby filtrować zasoby. Obecnie widzisz <b>${materialState.allMaterials.length}</b> materiałów w systemie.</p>
-
-                    <div id="class-filters" class="flex flex-wrap gap-3 mb-8">
-                    </div>
-
-                    <div id="materials-list" class="grid md:grid-cols-2 gap-6">
-                        <!-- Materiały ładowane przez renderFilesClubViewContent -->
-                    </div>
-                    ${materialState.allMaterials.length === 0 ? `<div class="text-center py-10 text-gray-500 italic">Brak materiałów w bazie. Administratorze, dodaj pierwszy plik!</div>` : ''}
-                </div>
-            `;
-        };
-
-
-        const render = () => {
-            viewContainer.style.opacity = '0';
-            viewContainer.style.transform = 'perspective(1000px) translateY(20px) scale(0.98)';
-            
-            let htmlContent;
+        } else {
+            // Użytkownik wylogowany (auth.currentUser jest null)
             switch (currentView) {
-                case 'home': htmlContent = renderHomeView(); break;
-                case 'auth': htmlContent = renderAuthView(false); break;
-                case 'dashboard': htmlContent = renderDashboardView(); break;
-                case 'verificationStatusCheck': htmlContent = renderVerificationStatusView(); break;
-                case 'filesClub': htmlContent = renderFilesClubView(); break;
-                default: htmlContent = renderHomeView();
+                case 'login':
+                    container.innerHTML = renderLogin();
+                    break;
+                case 'register':
+                    container.innerHTML = renderRegister();
+                    break;
+                case 'club':
+                case 'verification':
+                case 'home':
+                default:
+                    // Wymuś powrót do strony głównej dla wylogowanych
+                    currentView = 'home'; 
+                    container.innerHTML = renderHome();
+                    break;
             }
-            viewContainer.innerHTML = htmlContent;
-            
-            setTimeout(() => {
-                viewContainer.style.opacity = '1';
-                viewContainer.style.transform = 'perspective(1000px) translateY(0) scale(1)';
-                
-                if (currentView === 'auth') {
-                    document.getElementById('auth-form').addEventListener('submit', handleAuthFormSubmit);
-                } else if (currentView === 'filesClub' && userProfile?.verificationStatus === 'verified') {
-                    if (materialState.viewMode === 'view') {
-                        renderFilesClubViewContent();
-                    } else if (materialState.viewMode === 'add') {
-                        document.getElementById('add-material-form').addEventListener('submit', handleAddMaterialSubmit);
-                    }
-                }
-            }, 600);
-        };
+        }
+    }
 
-        // --- INICJALIZACJA ---
-        setupFirebase();
+    // Funkcja pomocnicza do pobierania materiału
+    window.generatePDF = (id) => {
+        const material = materialsData.find(m => m.id === id);
+        if (material) {
+            generatePDF(material);
+        } else {
+            showModal("Błąd Materiału", "Nie znaleziono wybranego materiału.");
+        }
+    };
 
-    </script>
+    // Ujawnienie funkcji do globalnego zasięgu (wymagane w HTML inline event handlers)
+    window.setView = setView;
+    window.handleLogin = handleLogin;
+    window.handleRegister = handleRegister;
+    window.handleLogout = handleLogout;
+    window.showModal = showModal; 
+
+    // Uruchomienie aplikacji
+    initAuthAndSubscribe();
+
+</script>
 </body>
 </html>
